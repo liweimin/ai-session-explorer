@@ -87,7 +87,6 @@ Start-AISessionWork.bat
 
 它会做三件事：
 
-- 更新工具仓库
 - 更新私有数据仓库
 - 把私有数据仓库里的会话导入到本机 Codex / Claude Code
 
@@ -127,9 +126,21 @@ Finish-AISessionWork.bat
 
 这样另一台电脑下次点 Start 就能拿到最新上下文。
 
+### 6. 需要时再更新工具
+
+日常 `Start` / `Finish` 只同步会话数据，不会自动更新工具代码。
+
+如果你确认要升级工具本身，再双击：
+
+```text
+Update-AISessionExplorer.bat
+```
+
+这样可以避免工具代码不稳定时影响日常同步。
+
 ## 每天怎么用
 
-开始工作：
+开始工作，只同步数据并导入本机：
 
 ```text
 Start-AISessionWork.bat
@@ -147,7 +158,13 @@ Open-SessionExplorer.bat
 Finish-AISessionWork.bat
 ```
 
-只记这三个入口即可。
+更新工具本身，按需手动执行：
+
+```text
+Update-AISessionExplorer.bat
+```
+
+日常主要记住 `Start`、`Open`、`Finish`；工具升级时再点 `Update`。
 
 ## 数据会保存在哪里
 
@@ -189,12 +206,11 @@ SESSION_DATA_ROOT=D:\00容器\ai_sys\ai-session-data\data
 
 这个路径必须在私有数据仓库里，不能指向工具仓库自己的 `data` 目录。
 
-### Start / Finish 拉取失败
+### Start / Finish 同步失败
 
-先确认两个仓库都有 GitHub 权限：
+先确认私有数据仓库有 GitHub 权限：
 
 ```powershell
-git -C D:\00容器\ai_sys\ai-session-explorer pull
 git -C D:\00容器\ai_sys\ai-session-data pull
 ```
 

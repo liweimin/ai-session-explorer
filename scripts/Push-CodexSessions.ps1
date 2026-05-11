@@ -38,79 +38,21 @@ function Get-CurrentGitBranch {
     return $branch.Trim()
 }
 
-function Get-DirtyRepoPaths {
-    $statusLines = git status --porcelain=v1
-    if ($LASTEXITCODE -ne 0) {
-        throw "git status --porcelain=v1 failed with exit code $LASTEXITCODE"
-    }
-
-    $paths = New-Object System.Collections.Generic.List[string]
-    foreach ($line in $statusLines) {
-        if ([string]::IsNullOrWhiteSpace($line)) {
-            continue
-        }
-
-        $path = if ($line.Length -gt 3) { $line.Substring(3).Trim() } else { "" }
-        if ([string]::IsNullOrWhiteSpace($path)) {
-            continue
-        }
-
-        if ($path -like "* -> *") {
-            $path = ($path -split " -> ", 2)[1]
-        }
-
-        [void]$paths.Add(($path -replace "\\", "/"))
-    }
-
-    return $paths
-}
-
-function Test-IsManagedGeneratedPath {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    $normalized = $Path -replace "\\", "/"
-    return $false
-}
-
-function Test-IsIgnoredLocalPath {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    $normalized = $Path -replace "\\", "/"
-    return (
-        $normalized -eq ".env.local" -or
-        $normalized -eq ".env.local.example.local" -or
-        $normalized.StartsWith(".venv/") -or
-        $normalized -eq ".venv" -or
-        $normalized.StartsWith("output/") -or
-        $normalized -eq "output"
-    )
-}
-
-function Protect-RepoBeforePull {
-    $dirtyPaths = @(Get-DirtyRepoPaths)
-    if ($dirtyPaths.Count -eq 0) {
-        return
-    }
-
-    $unexpectedPaths = @($dirtyPaths | Where-Object { -not (Test-IsManagedGeneratedPath $_) -and -not (Test-IsIgnoredLocalPath $_) })
-    if ($unexpectedPaths.Count -gt 0) {
-        $joined = $unexpectedPaths -join ", "
-        throw "Finish detected unstaged changes outside sync-managed data: $joined. Please commit, stash, or revert them first."
-    }
-
-    return
-}
-
 function Invoke-DataRepoPull {
     Push-Location $dataRepoRoot
+    $stashCreated = $false
     try {
+        $status = git status --porcelain
+        if ($status) {
+            Invoke-Git -Arguments @("stash", "push", "--include-untracked", "-m", "auto-stash ai session data before finish pull")
+            $stashCreated = $true
+            Write-Host "Temporarily stashed existing data repository changes before pull."
+        }
         Invoke-Git -Arguments @("pull", "--rebase", "origin", (Get-CurrentGitBranch))
+        if ($stashCreated) {
+            Invoke-Git -Arguments @("stash", "pop")
+            Write-Host "Restored existing data repository changes after pull."
+        }
     }
     finally {
         Pop-Location
@@ -199,10 +141,7 @@ if ([string]::IsNullOrWhiteSpace($Message)) {
 }
 
 Push-Location $repoRoot
-$autoStashRef = $null
 try {
-    $autoStashRef = Protect-RepoBeforePull
-    Invoke-Git -Arguments @("pull", "--rebase", "origin", (Get-CurrentGitBranch))
     Invoke-DataRepoPull
 
     Sync-Directory -Source (Join-Path $stageRoot "sessions") -Target (Join-Path $dataRoot "sessions")
@@ -217,9 +156,6 @@ try {
     exit 0
 }
 finally {
-    if ($autoStashRef) {
-        & git stash drop $autoStashRef | Out-Null
-    }
     Pop-Location
     if (Test-Path $stageRoot) {
         Remove-Item -LiteralPath $stageRoot -Recurse -Force

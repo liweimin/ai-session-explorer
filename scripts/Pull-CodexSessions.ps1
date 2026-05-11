@@ -34,14 +34,6 @@ function Get-CurrentGitBranch {
     return $branch.Trim()
 }
 
-Push-Location $repoRoot
-try {
-    Invoke-Git -Arguments @("pull", "--ff-only", "origin", (Get-CurrentGitBranch))
-}
-finally {
-    Pop-Location
-}
-
 Push-Location $dataRepoRoot
 try {
     Invoke-Git -Arguments @("pull", "--ff-only", "origin", (Get-CurrentGitBranch))
