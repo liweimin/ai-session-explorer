@@ -1,0 +1,3184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex 会话检索台</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #718096;
+      --line: #e4eaf1;
+      --accent: #2b7ee7;
+      --accent-soft: #eaf4ff;
+      --warn: #a15a1a;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      --radius: 8px;
+      --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+      --sans: "Segoe UI Variable Display", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      overflow-x: hidden;
+      font-family: var(--sans);
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    h1, h2, p { margin: 0; }
+
+    .shell {
+      width: min(1480px, calc(100vw - 32px));
+      height: calc(100vh - 18px);
+      margin: 8px auto 10px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 8px;
+      min-width: 0;
+      animation: enter 260ms ease-out;
+    }
+
+    .filters {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 6px;
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .filter-row {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .filter-primary {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(280px, 1.45fr) repeat(5, minmax(124px, 0.62fr)) auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .filter-secondary {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 18px;
+    }
+
+    .toolbar-chip-group {
+      display: none;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .toolbar-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+      max-width: 100%;
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: #536273;
+      background: #f6f8fb;
+      border: 1px solid #e8edf3;
+      font-size: 12px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .toolbar-status {
+      flex: 0 0 auto;
+      max-width: min(560px, 52vw);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    .field { min-width: 0; }
+
+    .field.filter-action {
+      min-width: max-content;
+    }
+
+    .field-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .search-wrap { position: relative; }
+
+    .search-wrap::before {
+      content: "⌕";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    .field-control,
+    .search-input,
+    .button {
+      width: 100%;
+      min-height: 34px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .search-input { padding: 0 12px 0 34px; }
+    .field-control { padding: 0 10px; }
+
+    .button {
+      padding: 0 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+    }
+
+    .button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(31, 42, 51, 0.08);
+      border-color: #bdd7f5;
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      color: #a7b1bd;
+      background: #f7f9fb;
+    }
+
+    .button.primary {
+      color: #fff;
+      background: var(--accent);
+      border-color: transparent;
+    }
+
+    .workspace {
+      min-height: 0;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(360px, 36%) minmax(0, 64%);
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel {
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .panel-title h2 {
+      flex: 0 0 auto;
+      font-size: 16px;
+      font-weight: 730;
+    }
+
+    .list-head {
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .list-head-copy {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .result-hint {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .result-inline-stats {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-hint,
+    .result-hint.is-empty {
+      display: none;
+    }
+
+    .count-pill,
+    .meta-pill,
+    .source-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 12px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .count-pill {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-color: #d3e8ff;
+      font-weight: 700;
+    }
+
+    .meta-pill {
+      color: var(--muted);
+      background: #f5f7fa;
+      border-color: #e8edf2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .source-badge {
+      color: #155aa5;
+      background: #edf6ff;
+      border-color: #d7eafb;
+      font-weight: 700;
+    }
+
+    .source-badge[data-source="claude_code"] {
+      color: #8b4b15;
+      background: #fff4e8;
+      border-color: #f5d6b6;
+    }
+
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: #516173;
+      background: #f4f7fb;
+      border: 1px solid #e3eaf2;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .type-badge[data-type="subagent"] {
+      color: #7a4b12;
+      background: #fff5e8;
+      border-color: #f5d8b3;
+    }
+
+    .list-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 5px;
+    }
+
+    .session-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-bottom: 8px;
+    }
+
+    .session-card {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      padding: 8px 9px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+    }
+
+    .session-card:hover {
+      border-color: #bdd7f5;
+      box-shadow: 0 10px 22px rgba(29, 42, 56, 0.08);
+    }
+
+    .session-card.active {
+      background: #eef6ff;
+      border-color: #bcdcff;
+      box-shadow: none;
+    }
+
+    .session-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 3px;
+    }
+
+    .session-card-title,
+    .session-card-recent {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .session-card-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      -webkit-line-clamp: 2;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.28;
+      font-weight: 750;
+    }
+
+    .session-card-recent {
+      -webkit-line-clamp: 1;
+      margin-bottom: 4px;
+      color: #344054;
+      font-size: 12px;
+      line-height: 1.28;
+    }
+
+    .session-card-match {
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      margin-bottom: 4px;
+      color: #516173;
+      font-size: 11px;
+      line-height: 1.28;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .session-card-arrow {
+      color: #8b98a7;
+      font-size: 14px;
+      line-height: 1;
+      padding-top: 2px;
+    }
+
+    .session-card-foot {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .session-card-foot {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .session-card-foot span {
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .scope-chip,
+    .summary-chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      padding: 4px 8px;
+      min-height: 22px;
+      border-radius: 999px;
+      border: 1px solid #e3eaf2;
+      background: #f7f9fc;
+      color: #516173;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .summary-chip[data-summary="fresh"] {
+      color: #137a4a;
+      background: #edfdf5;
+      border-color: #cdeedc;
+    }
+
+    .summary-chip[data-summary="stale"] {
+      color: #a15a1a;
+      background: #fff4e8;
+      border-color: #f5d6b6;
+    }
+
+    .list-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 3px 2px 1px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    mark {
+      background: #fff1a8;
+      color: inherit;
+      padding: 0 2px;
+      border-radius: 4px;
+    }
+
+    mark.active-match {
+      background: #ffb100;
+      color: #1f2937;
+      box-shadow: 0 0 0 2px rgba(255, 177, 0, 0.34);
+    }
+
+    .detail-wrap { height: 100%; }
+
+    .detail-wrap .panel-head {
+      align-items: flex-start;
+      padding-top: 8px;
+      padding-bottom: 8px;
+      gap: 8px;
+    }
+
+    .detail-head-main {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .detail-head-main h2 {
+      font-size: 16px;
+      line-height: 1.2;
+      font-weight: 760;
+    }
+
+    .detail-meta {
+      min-width: 0;
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .detail-meta .meta-pill {
+      max-width: min(420px, 34vw);
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    .detail-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      padding-top: 1px;
+    }
+
+    .detail-actions .button {
+      min-height: 30px;
+      width: auto;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .detail-actions .button.primary { min-width: 104px; }
+
+    .match-nav {
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .match-nav.visible { display: inline-flex; }
+
+    .match-count {
+      min-width: 68px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .detail-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .memory-card {
+      margin-bottom: 8px;
+      border: 1px solid #d9e8fb;
+      border-radius: var(--radius);
+      background: #f8fbff;
+      overflow: hidden;
+    }
+
+    .memory-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 10px;
+      border-bottom: 1px solid #e4effb;
+      background: #fff;
+    }
+
+    .memory-title {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-weight: 760;
+      line-height: 1.3;
+    }
+
+    .memory-subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .memory-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .memory-actions .button {
+      width: auto;
+      min-height: 28px;
+      font-size: 12px;
+      padding: 0 10px;
+    }
+
+    .memory-actions .button[disabled] {
+      opacity: 0.62;
+      cursor: wait;
+    }
+
+    .memory-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid #d7eafb;
+      background: #edf6ff;
+      color: #155aa5;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .memory-badge.stale {
+      color: #9a5a19;
+      background: #fff4e8;
+      border-color: #f5d6b6;
+    }
+
+    .memory-body {
+      padding: 8px 10px 10px;
+      font-size: 13px;
+      line-height: 1.46;
+    }
+
+    .memory-empty,
+    .memory-error {
+      color: #516173;
+      line-height: 1.7;
+    }
+
+    .memory-error {
+      color: #b42318;
+    }
+
+    .memory-content {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.75fr);
+      gap: 7px;
+    }
+
+    .memory-section {
+      padding: 8px 9px;
+      border-radius: var(--radius);
+      background: #fff;
+      border: 1px solid #e4effb;
+      min-width: 0;
+    }
+
+    .memory-section.empty {
+      color: #7a8796;
+      background: #fbfdff;
+    }
+
+    .memory-section.wide {
+      grid-column: 1 / -1;
+    }
+
+    .memory-section h3 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      line-height: 1.3;
+      color: #155aa5;
+    }
+
+    .memory-section div {
+      word-break: break-word;
+    }
+
+    .memory-section .code-chip,
+    .memory-action-bar .code-chip {
+      display: inline-flex;
+      max-width: 100%;
+      padding: 2px 6px;
+      border-radius: 7px;
+      background: #eef4fb;
+      color: #27435f;
+      font-family: var(--mono);
+      font-size: 12px;
+      vertical-align: baseline;
+      overflow-wrap: anywhere;
+    }
+
+    .memory-action-bar {
+      margin-top: 10px;
+      padding: 9px 11px;
+      border-radius: 12px;
+      border: 1px solid #cfe4fb;
+      background: #edf7ff;
+      color: #17436d;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .rich-text {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      word-break: break-word;
+    }
+
+    .rich-text p,
+    .rich-text ul,
+    .rich-text ol,
+    .rich-text pre,
+    .rich-text blockquote,
+    .rich-text table,
+    .rich-text hr {
+      margin: 0;
+    }
+
+    .rich-text h2,
+    .rich-text h3 {
+      margin: 6px 0 0;
+      line-height: 1.35;
+    }
+
+    .rich-text h2 {
+      font-size: 17px;
+      color: #17436d;
+    }
+
+    .rich-text h3 {
+      font-size: 15px;
+      color: #155aa5;
+    }
+
+    .rich-text ul,
+    .rich-text ol {
+      padding-left: 22px;
+      line-height: 1.5;
+    }
+
+    .rich-text pre {
+      padding: 9px 10px;
+      border-radius: var(--radius);
+      overflow: auto;
+      background: #f3f6fa;
+      border: 1px solid #e2e9f1;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .rich-text blockquote {
+      padding: 8px 10px;
+      border-left: 3px solid #9cc8f7;
+      background: #f5f9ff;
+      color: #516173;
+    }
+
+    .rich-text hr {
+      border: 0;
+      border-top: 1px solid #dbe5ef;
+      margin-top: 2px;
+      margin-bottom: 2px;
+    }
+
+    .rich-text-table-wrap {
+      overflow-x: auto;
+      border: 1px solid #dde8f2;
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .rich-text table {
+      width: 100%;
+      min-width: 420px;
+      border-collapse: collapse;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .rich-text thead {
+      background: #f5f9ff;
+    }
+
+    .rich-text th,
+    .rich-text td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e6edf5;
+      border-right: 1px solid #eef3f8;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .rich-text th:last-child,
+    .rich-text td:last-child {
+      border-right: 0;
+    }
+
+    .rich-text tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .rich-text th {
+      color: #17436d;
+      font-weight: 760;
+    }
+
+    .plan-card {
+      border: 1px solid #d7eafb;
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius);
+      background: #fbfdff;
+      overflow: hidden;
+    }
+
+    .plan-card-title {
+      padding: 7px 9px;
+      font-weight: 760;
+      color: #155aa5;
+      border-bottom: 1px solid #e3effb;
+      background: #edf6ff;
+    }
+
+    .plan-card-body {
+      padding: 8px 9px;
+    }
+
+    .transcript-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .transcript-card {
+      padding: 9px 10px 8px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .transcript-card[data-kind="user"] {
+      background: #fff9f1;
+      border-color: #f6dfc0;
+    }
+
+    .transcript-card[data-kind="ai"] {
+      background: #f3f8ff;
+      border-color: #d9eafe;
+    }
+
+    .transcript-card[data-kind="tool"] {
+      background: #f8fafc;
+      border-color: #e5eaf0;
+    }
+
+    .transcript-card[data-kind="developer"],
+    .transcript-card[data-kind="system"] {
+      background: #fafbfc;
+      border-color: #dde5ee;
+    }
+
+    .transcript-card.jump-focus {
+      outline: 2px solid rgba(43, 126, 231, 0.7);
+      box-shadow: 0 0 0 4px rgba(43, 126, 231, 0.12);
+    }
+
+    .transcript-card.match-focus {
+      outline: 2px solid rgba(255, 177, 0, 0.72);
+      box-shadow: 0 0 0 4px rgba(255, 177, 0, 0.14);
+    }
+
+    .transcript-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .transcript-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .transcript-card[data-kind="user"] .transcript-tag {
+      color: #9a5a19;
+      background: rgba(196, 104, 41, 0.12);
+    }
+
+    .transcript-card[data-kind="ai"] .transcript-tag {
+      color: #1971d4;
+      background: rgba(25, 136, 255, 0.12);
+    }
+
+    .transcript-card[data-kind="tool"] .transcript-tag {
+      color: #7b48d6;
+      background: #f2ebff;
+    }
+
+    .transcript-card[data-kind="developer"] .transcript-tag,
+    .transcript-card[data-kind="system"] .transcript-tag {
+      color: #516173;
+      background: #eef2f6;
+    }
+
+    .transcript-time {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .transcript-text {
+      font-size: 14px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .transcript-text.collapsed {
+      position: relative;
+      max-height: 260px;
+      overflow: hidden;
+    }
+
+    .transcript-text.collapsed::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 64px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.98));
+      pointer-events: none;
+    }
+
+    .transcript-card[data-kind="user"] .transcript-text.collapsed::after {
+      background: linear-gradient(to bottom, rgba(255, 249, 241, 0), rgba(255, 249, 241, 0.98));
+    }
+
+    .transcript-card[data-kind="ai"] .transcript-text.collapsed::after {
+      background: linear-gradient(to bottom, rgba(243, 248, 255, 0), rgba(243, 248, 255, 0.98));
+    }
+
+    .transcript-card[data-kind="developer"] .transcript-text.collapsed::after,
+    .transcript-card[data-kind="system"] .transcript-text.collapsed::after {
+      background: linear-gradient(to bottom, rgba(250, 251, 252, 0), rgba(250, 251, 252, 0.98));
+    }
+
+    .transcript-text .rich-text,
+    .memory-section .rich-text,
+    .memory-action-bar .rich-text {
+      white-space: normal;
+    }
+
+    .transcript-card[data-kind="tool"] .transcript-text {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .tool-details {
+      margin-top: 4px;
+    }
+
+    .tool-details summary {
+      cursor: pointer;
+      color: #516173;
+      font-size: 12px;
+      font-weight: 700;
+      user-select: none;
+    }
+
+    .tool-details .transcript-text {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #d9d2ea;
+    }
+
+    .transcript-expand {
+      margin-top: 8px;
+      border: 0;
+      background: transparent;
+      color: #2b7ee7;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .detail-body-wide .transcript-card,
+    .detail-body-wide .memory-card {
+      max-width: none;
+    }
+
+    .empty-state {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 30px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    /* Dense archive-console refresh. Keep the screen focused on list + transcript. */
+    :root {
+      --bg: #eef3f8;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #617089;
+      --line: #dce5ef;
+      --accent: #256fdd;
+      --accent-soft: #e7f1ff;
+      --shadow: 0 1px 0 rgba(255,255,255,0.82) inset, 0 10px 30px rgba(31, 45, 61, 0.055);
+      --sans: "Aptos Display", "Segoe UI Variable", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+    }
+
+    html, body {
+      background:
+        linear-gradient(90deg, rgba(37,111,221,0.035) 1px, transparent 1px) 0 0 / 28px 28px,
+        linear-gradient(180deg, rgba(37,111,221,0.03) 1px, transparent 1px) 0 0 / 28px 28px,
+        var(--bg);
+    }
+
+    .shell {
+      width: min(1760px, calc(100vw - 24px));
+      height: calc(100vh - 14px);
+      margin: 6px auto 8px;
+      gap: 7px;
+    }
+
+    .filters {
+      gap: 3px;
+      padding: 5px 6px;
+      border-color: #d8e2ee;
+      background: rgba(255,255,255,0.96);
+    }
+
+    .filter-primary {
+      grid-template-columns: minmax(300px, 1.55fr) repeat(5, minmax(132px, 0.64fr)) auto auto;
+      gap: 6px;
+    }
+
+    .filter-secondary {
+      min-height: 16px;
+      padding: 0 2px;
+    }
+
+    .toolbar-status {
+      max-width: 100%;
+      color: #5e6d85;
+      font-size: 12px;
+    }
+
+    .field-control,
+    .search-input,
+    .button {
+      min-height: 32px;
+      border-color: #d8e2ed;
+      font-size: 13px;
+    }
+
+    .button {
+      font-weight: 650;
+    }
+
+    .button.primary {
+      background: #2575e6;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.28) inset;
+    }
+
+    .workspace {
+      grid-template-columns: minmax(390px, 35%) minmax(0, 65%);
+      gap: 8px;
+    }
+
+    .panel {
+      border-color: #d8e2ed;
+      background: rgba(255,255,255,0.98);
+    }
+
+    .panel-head {
+      padding: 8px 11px;
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+    }
+
+    .panel-title h2 {
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .list-head {
+      padding-bottom: 6px;
+    }
+
+    .result-inline-stats {
+      flex: 1 1 auto;
+      font-size: 12px;
+      color: #5d6f89;
+    }
+
+    .count-pill,
+    .meta-pill,
+    .source-badge,
+    .scope-chip,
+    .summary-chip,
+    .type-badge {
+      border-radius: 7px;
+    }
+
+    .count-pill {
+      min-height: 25px;
+      padding: 4px 9px;
+    }
+
+    .list-body {
+      padding: 4px;
+    }
+
+    .session-list {
+      gap: 5px;
+      padding-bottom: 6px;
+    }
+
+    .session-card {
+      position: relative;
+      padding: 7px 8px;
+      border-color: #dfe7f0;
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+      color: var(--ink);
+      font: inherit;
+      white-space: normal;
+    }
+
+    .session-card:hover {
+      border-color: #aecaef;
+      background: #fff;
+    }
+
+    .session-card.active {
+      background: #eaf4ff;
+      border-color: #9dc9fb;
+      box-shadow: inset 3px 0 0 #2676e6;
+    }
+
+    .session-card-head {
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .session-card-title {
+      font-size: 13px;
+      line-height: 1.24;
+      -webkit-line-clamp: 2;
+    }
+
+    .session-card-recent,
+    .session-card-match {
+      margin-bottom: 3px;
+      line-height: 1.25;
+    }
+
+    .session-card-badges {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 4px 0 3px;
+      min-width: 0;
+    }
+
+    .session-card-badges .source-badge,
+    .session-card-badges .type-badge,
+    .session-card-badges .scope-chip,
+    .session-card-badges .summary-chip,
+    .fork-chip {
+      min-height: 20px;
+      padding: 3px 6px;
+      font-size: 10.5px;
+      line-height: 1.15;
+      max-width: 100%;
+    }
+
+    .fork-chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #f0d3a5;
+      background: #fff7e8;
+      color: #8b5419;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .session-card-foot {
+      gap: 5px;
+      font-size: 11px;
+    }
+
+    .session-card-foot .project-name {
+      max-width: 44%;
+      font-weight: 650;
+      color: #607089;
+    }
+
+    .detail-wrap .panel-head {
+      padding-top: 7px;
+      padding-bottom: 7px;
+    }
+
+    .detail-head-main {
+      gap: 5px;
+    }
+
+    .detail-meta {
+      gap: 4px;
+    }
+
+    .detail-meta .meta-pill {
+      max-width: min(560px, 46vw);
+      padding: 4px 7px;
+    }
+
+    .detail-meta .cwd-pill {
+      flex: 1 1 340px;
+      max-width: min(760px, 58vw);
+      justify-content: flex-start;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #52647c;
+    }
+
+    .detail-meta .id-pill {
+      font-family: var(--mono);
+      color: #4d617a;
+    }
+
+    .detail-actions {
+      gap: 5px;
+      flex-wrap: nowrap;
+    }
+
+    .detail-actions .button {
+      min-height: 30px;
+      padding: 0 9px;
+    }
+
+    .detail-scroll {
+      padding: 6px;
+    }
+
+    .memory-card {
+      margin-bottom: 6px;
+      border-color: #cfe1f5;
+      background: #f7fbff;
+    }
+
+    .memory-head {
+      padding: 7px 9px;
+      gap: 8px;
+    }
+
+    .memory-title {
+      font-size: 14px;
+    }
+
+    .memory-subtitle {
+      margin-top: 2px;
+      font-size: 11.5px;
+    }
+
+    .memory-actions {
+      gap: 5px;
+      flex-wrap: nowrap;
+    }
+
+    .memory-actions .button {
+      min-height: 27px;
+      padding: 0 8px;
+      font-size: 11.5px;
+    }
+
+    .memory-badge {
+      padding: 3px 6px;
+      border-radius: 7px;
+      font-size: 10.5px;
+    }
+
+    .memory-body {
+      padding: 7px 8px 8px;
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    .memory-content {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .memory-section {
+      padding: 7px 8px;
+      border-color: #dbe9f8;
+      background: #fff;
+    }
+
+    .memory-section.wide {
+      grid-column: span 2;
+    }
+
+    .memory-section.full {
+      grid-column: 1 / -1;
+    }
+
+    .memory-section h3 {
+      margin-bottom: 5px;
+      font-size: 12.5px;
+      color: #185fae;
+    }
+
+    .rich-text {
+      gap: 5px;
+    }
+
+    .rich-text h2 {
+      font-size: 15px;
+    }
+
+    .rich-text h3 {
+      font-size: 13.5px;
+    }
+
+    .transcript-stack {
+      gap: 5px;
+    }
+
+    .transcript-card {
+      padding: 8px 9px 7px;
+      border-color: #dfe7f0;
+    }
+
+    .transcript-head {
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .transcript-tag {
+      padding: 3px 7px;
+      border-radius: 7px;
+    }
+
+    .transcript-text {
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+
+    .transcript-card[data-kind="developer"],
+    .transcript-card[data-kind="system"] {
+      padding: 6px 8px;
+      background: #fbfcfe;
+    }
+
+    .meta-details {
+      margin-top: 2px;
+    }
+
+    .meta-details summary {
+      color: #68778e;
+      font-size: 12px;
+    }
+
+    .load-more {
+      width: auto;
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .status-text[data-tone="busy"] { color: var(--warn); }
+    .status-text[data-tone="error"] { color: #b42318; }
+
+    .outline-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(32, 44, 56, 0.36);
+      z-index: 20;
+    }
+
+    .outline-backdrop.open { display: flex; }
+
+    .outline-sheet {
+      width: min(860px, calc(100vw - 32px));
+      max-height: min(78vh, 900px);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid var(--line);
+      box-shadow: 0 28px 80px rgba(22, 31, 41, 0.26);
+      overflow: hidden;
+      animation: rise 180ms ease-out;
+    }
+
+    .memory-sheet {
+      width: min(1080px, calc(100vw - 32px));
+    }
+
+    .outline-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .outline-head h2 { font-size: 16px; }
+
+    .outline-body {
+      max-height: calc(78vh - 90px);
+      overflow: auto;
+      padding: 8px 12px 12px;
+    }
+
+    .memory-sheet .outline-body {
+      padding: 10px 12px 12px;
+    }
+
+    .outline-search { margin-bottom: 8px; }
+
+    .outline-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+
+    .outline-item {
+      padding: 10px;
+      border-radius: 14px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    .outline-jump {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 10px;
+      width: 100%;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .outline-jump:hover .outline-text {
+      color: #155aa5;
+    }
+
+    .outline-index {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 720;
+      background: var(--accent);
+    }
+
+    .outline-text {
+      font-size: 14px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .outline-time {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1180px) {
+      .filter-primary {
+        grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(122px, 0.7fr)) auto auto;
+      }
+
+      .workspace { grid-template-columns: minmax(320px, 34%) minmax(0, 66%); }
+      .detail-meta .meta-pill { max-width: min(360px, 40vw); }
+    }
+
+    @media (max-width: 920px) {
+      html, body {
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      .shell {
+        min-height: calc(100vh - 20px);
+        height: auto;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+        overflow: visible;
+      }
+
+      .panel {
+        min-height: 0;
+      }
+
+      .list-body {
+        max-height: 40vh;
+      }
+
+      .detail-wrap {
+        min-height: 58vh;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: calc(100vw - 20px);
+        max-width: 100%;
+        margin: 6px auto 8px;
+        overflow-x: hidden;
+      }
+
+      .filters {
+        gap: 7px;
+        padding: 6px;
+      }
+
+      .filter-primary {
+        display: flex;
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .filter-primary .field {
+        flex: 0 0 150px;
+      }
+
+      .filter-primary .field:first-child {
+        flex-basis: 260px;
+      }
+
+      .filter-primary .field.filter-action {
+        flex: 0 0 auto;
+      }
+
+      .filter-secondary {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .toolbar-chip-group {
+        flex-wrap: nowrap;
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .toolbar-status {
+        max-width: 100%;
+        text-align: left;
+      }
+
+      .panel {
+        max-width: 100%;
+      }
+
+      .panel-head, .detail-scroll, .outline-head { padding-left: 10px; padding-right: 10px; }
+      .list-head { flex-direction: column; }
+      .detail-wrap .panel-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .detail-head-main,
+      .detail-meta {
+        width: 100%;
+      }
+
+      .detail-meta .meta-pill {
+        max-width: 100%;
+      }
+
+      .detail-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+      }
+      .memory-head { flex-direction: column; }
+      .memory-actions { justify-content: flex-start; }
+      .memory-content { grid-template-columns: 1fr; }
+      .outline-jump { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="filters">
+      <div class="filter-row filter-primary">
+        <div class="field">
+          <label class="field-label" for="searchInput">搜索</label>
+          <div class="search-wrap">
+            <input id="searchInput" class="search-input" type="search" placeholder="搜标题、项目、路径、最近聊天、正文关键词">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="summaryFilter">总结状态</label>
+          <select id="summaryFilter" class="field-control">
+            <option value="all">全部总结</option>
+            <option value="none">未总结</option>
+            <option value="fresh">已总结</option>
+            <option value="stale">有新增</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="scopeFilter">会话范围</label>
+          <select id="scopeFilter" class="field-control">
+            <option value="current">当前历史</option>
+            <option value="archived">归档历史</option>
+            <option value="all">全部历史</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="projectFilter">项目</label>
+          <select id="projectFilter" class="field-control">
+            <option value="all">全部项目</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="sourceFilter">来源</label>
+          <select id="sourceFilter" class="field-control">
+            <option value="codex">Codex</option>
+            <option value="claude_code">Claude Code</option>
+            <option value="all">全部来源</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="typeFilter">类型</label>
+          <select id="typeFilter" class="field-control">
+            <option value="all">全部类型</option>
+            <option value="main">普通聊天</option>
+            <option value="subagent">子智能体任务</option>
+          </select>
+        </div>
+        <div class="field filter-action">
+          <label class="field-label">&nbsp;</label>
+          <button id="refreshButton" class="button primary" type="button">刷新最新记录</button>
+        </div>
+        <div class="field filter-action">
+          <label class="field-label">&nbsp;</label>
+          <button id="clearButton" class="button" type="button">清空筛选</button>
+        </div>
+      </div>
+      <div class="filter-row filter-secondary">
+        <div class="toolbar-chip-group">
+          <span class="toolbar-chip">排序：最新在前</span>
+          <span class="toolbar-chip">首屏：100 条</span>
+          <span class="toolbar-chip">自动刷新：前台 10 分钟 / 后台 30 分钟</span>
+        </div>
+        <span id="serviceStatus" class="muted status-text toolbar-status">准备中</span>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <section class="panel">
+        <div class="panel-head list-head">
+          <div class="list-head-copy">
+            <div class="panel-title">
+              <h2>会话列表</h2>
+              <span class="count-pill" id="resultCount">0</span>
+              <div id="resultInlineStats" class="result-inline-stats"></div>
+            </div>
+            <div class="result-hint" id="resultHint">加载中</div>
+          </div>
+        </div>
+        <div class="list-body">
+          <div id="sessionList" class="session-list"></div>
+        </div>
+      </section>
+
+      <section class="panel detail-wrap">
+        <div class="panel-head">
+          <div class="panel-title detail-head-main">
+            <h2>会话详情</h2>
+            <div id="detailMetaBar" class="detail-meta"></div>
+          </div>
+          <div class="detail-actions">
+            <div id="matchNav" class="match-nav">
+              <button id="prevMatchButton" class="button" type="button" title="上一个命中">↑</button>
+              <span id="matchCount" class="match-count">0 / 0</span>
+              <button id="nextMatchButton" class="button" type="button" title="下一个命中">↓</button>
+            </div>
+            <button id="copyResumeButton" class="button" type="button">复制 resume 命令</button>
+            <button id="replayEditorButton" class="button" type="button">打开 Replay Editor</button>
+            <button id="memoryButton" class="button" type="button">上下文工程卡</button>
+            <button id="outlineButton" class="button primary" type="button">对话目录</button>
+          </div>
+        </div>
+        <div id="detailRoot" class="detail-scroll"></div>
+      </section>
+    </section>
+  </div>
+
+  <div id="outlineBackdrop" class="outline-backdrop" aria-hidden="true">
+    <div class="outline-sheet" role="dialog" aria-modal="true" aria-labelledby="outlineTitle">
+      <div class="outline-head">
+        <div>
+          <h2 id="outlineTitle">对话目录</h2>
+          <p class="muted" id="outlineSubtitle">按用户提问整理</p>
+        </div>
+        <button id="closeOutlineButton" class="button" type="button">关闭</button>
+      </div>
+      <div class="outline-body">
+        <div class="outline-search">
+          <label class="field-label" for="outlineSearchInput">目录搜索</label>
+          <div class="search-wrap">
+            <input id="outlineSearchInput" class="search-input" type="search" placeholder="只搜索这个对话目录里的用户提问">
+          </div>
+        </div>
+        <ol id="outlineList" class="outline-list"></ol>
+      </div>
+    </div>
+  </div>
+
+  <div id="memoryBackdrop" class="outline-backdrop" aria-hidden="true">
+    <div class="outline-sheet memory-sheet" role="dialog" aria-modal="true" aria-labelledby="memoryTitle">
+      <div class="outline-head">
+        <div>
+          <h2 id="memoryTitle">上下文工程卡</h2>
+          <p class="muted" id="memorySubtitle">Kimi 上下文压缩与协作建议</p>
+        </div>
+        <button id="closeMemoryButton" class="button" type="button">关闭</button>
+      </div>
+      <div id="memoryRoot" class="outline-body"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const state = {
+        apiMode: true,
+        catalog: { generated_at: "", total_sessions: 0, source_counts: {}, projects: [], sessions: [] },
+        sessions: [],
+        detailCache: new Map(),
+        summaryCache: new Map(),
+        summaryErrors: new Map(),
+        collapsedMemory: new Set(),
+        query: "",
+        outlineQuery: "",
+        summaryStatus: "all",
+        sessionScope: "current",
+        project: "all",
+        source: "codex",
+        sessionType: "all",
+        selectedKey: "",
+        visibleLimit: 100,
+        lastGeneratedAt: "",
+        lastRefreshAt: "",
+        nextAutoRefreshAt: 0,
+        lastKnownRunning: false,
+        loadingDetailKey: "",
+        loadingSummaryKey: "",
+        generatingSummaryKey: "",
+        openingReplayEditorKey: ""
+      };
+
+      const sourceLabels = { codex: "Codex", claude_code: "Claude Code" };
+      const typeLabels = { main: "普通聊天", subagent: "子智能体任务" };
+      const scopeLabels = { current: "当前历史", archived: "归档历史" };
+      const summaryLabels = { none: "未总结", fresh: "已总结", stale: "有新增" };
+      const foregroundRefreshMs = 10 * 60 * 1000;
+      const backgroundRefreshMs = 30 * 60 * 1000;
+
+      const els = {
+        searchInput: document.getElementById("searchInput"),
+        summaryFilter: document.getElementById("summaryFilter"),
+        scopeFilter: document.getElementById("scopeFilter"),
+        projectFilter: document.getElementById("projectFilter"),
+        sourceFilter: document.getElementById("sourceFilter"),
+        typeFilter: document.getElementById("typeFilter"),
+        refreshButton: document.getElementById("refreshButton"),
+        clearButton: document.getElementById("clearButton"),
+        resultCount: document.getElementById("resultCount"),
+        resultInlineStats: document.getElementById("resultInlineStats"),
+        resultHint: document.getElementById("resultHint"),
+        sessionList: document.getElementById("sessionList"),
+        detailRoot: document.getElementById("detailRoot"),
+        detailMetaBar: document.getElementById("detailMetaBar"),
+        serviceStatus: document.getElementById("serviceStatus"),
+        matchNav: document.getElementById("matchNav"),
+        matchCount: document.getElementById("matchCount"),
+        prevMatchButton: document.getElementById("prevMatchButton"),
+        nextMatchButton: document.getElementById("nextMatchButton"),
+        copyResumeButton: document.getElementById("copyResumeButton"),
+        replayEditorButton: document.getElementById("replayEditorButton"),
+        memoryButton: document.getElementById("memoryButton"),
+        outlineButton: document.getElementById("outlineButton"),
+        outlineBackdrop: document.getElementById("outlineBackdrop"),
+        closeOutlineButton: document.getElementById("closeOutlineButton"),
+        outlineSearchInput: document.getElementById("outlineSearchInput"),
+        outlineList: document.getElementById("outlineList"),
+        outlineSubtitle: document.getElementById("outlineSubtitle"),
+        memoryBackdrop: document.getElementById("memoryBackdrop"),
+        memoryRoot: document.getElementById("memoryRoot"),
+        memorySubtitle: document.getElementById("memorySubtitle"),
+        closeMemoryButton: document.getElementById("closeMemoryButton")
+      };
+
+      let transcriptMarks = [];
+      let activeMatchIndex = -1;
+      let searchTimer = 0;
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function escapeRegExp(value) {
+        return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function setStatus(text, tone) {
+        els.serviceStatus.textContent = text || "";
+        els.serviceStatus.dataset.tone = tone || "";
+      }
+
+      function sessionKey(session) {
+        return (session.source_kind || "codex") + ":" + (session.detail_id || session.session_id);
+      }
+
+      function shortSessionId(value) {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        if (text.length <= 12) return text;
+        return text.slice(0, 8) + "…" + text.slice(-4);
+      }
+
+      function formatDate(value, withYear) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "-";
+        const options = withYear
+          ? { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }
+          : { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" };
+        return new Intl.DateTimeFormat("zh-CN", options).format(date);
+      }
+
+      function formatRelative(value) {
+        if (!value) return "-";
+        const ms = Date.parse(value);
+        if (Number.isNaN(ms)) return "-";
+        const diff = Date.now() - ms;
+        const minute = 60 * 1000;
+        const hour = 60 * minute;
+        const day = 24 * hour;
+        if (diff < hour) return Math.max(1, Math.round(diff / minute)) + " 分钟前";
+        if (diff < day) return Math.round(diff / hour) + " 小时前";
+        return Math.round(diff / day) + " 天前";
+      }
+
+      function formatClock(ms) {
+        if (!ms) return "-";
+        return formatDate(new Date(ms).toISOString(), false);
+      }
+
+      function formatDuration(ms) {
+        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return minutes + ":" + String(seconds).padStart(2, "0");
+      }
+
+      function catalogSummaryText() {
+        const sourceCounts = state.catalog.source_counts || {};
+        const scopeCounts = state.catalog.scope_counts || {};
+        return [
+          "全库 " + String(state.catalog.total_sessions || state.sessions.length || 0),
+          "Codex " + String(sourceCounts.codex || 0),
+          "Claude " + String(sourceCounts.claude_code || 0),
+          "当前 " + String(scopeCounts.current || 0),
+          "归档 " + String(scopeCounts.archived || 0)
+        ].join(" · ");
+      }
+
+      function autoRefreshInterval() {
+        return document.hidden ? backgroundRefreshMs : foregroundRefreshMs;
+      }
+
+      function scheduleNextAutoRefresh(fromMs) {
+        state.nextAutoRefreshAt = (fromMs || Date.now()) + autoRefreshInterval();
+      }
+
+      function updateSummaryStatusForKey(key, memory) {
+        state.sessions = state.sessions.map((session) => {
+          if (sessionKey(session) !== key) return session;
+          const latestTurnCount = Number(session.turn_count || 0);
+          const delta = memory ? Math.max(0, Number(memory.delta_turns || (latestTurnCount - Number(memory.summarized_turn_count || 0)))) : 0;
+          const status = memory ? (delta > 0 ? "stale" : "fresh") : "none";
+          return normalizeSession({
+            ...session,
+            summary_status: status,
+            summary_delta_turns: delta,
+            summary_generated_at: memory ? memory.generated_at || "" : ""
+          });
+        });
+      }
+
+      function getQueryTokens() {
+        return state.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      }
+
+      function highlightText(value, tokens) {
+        const text = String(value || "");
+        if (!text || !tokens.length) return escapeHtml(text);
+        const uniqueTokens = Array.from(new Set(tokens.filter(Boolean))).sort((a, b) => b.length - a.length);
+        if (!uniqueTokens.length) return escapeHtml(text);
+        const regex = new RegExp(uniqueTokens.map(escapeRegExp).join("|"), "ig");
+        let html = "";
+        let lastIndex = 0;
+        let match = regex.exec(text);
+        while (match) {
+          html += escapeHtml(text.slice(lastIndex, match.index));
+          html += "<mark>" + escapeHtml(match[0]) + "</mark>";
+          lastIndex = match.index + match[0].length;
+          match = regex.exec(text);
+        }
+        html += escapeHtml(text.slice(lastIndex));
+        return html;
+      }
+
+      function renderInlineMarkdown(value) {
+        return String(value || "").split(/(`[^`]+`)/g).map((part) => {
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return '<span class="code-chip">' + escapeHtml(part.slice(1, -1)) + '</span>';
+          }
+          return escapeHtml(part);
+        }).join("");
+      }
+
+      function renderInlineRich(value, tokens) {
+        const text = String(value || "");
+        const renderPlain = (plain) => String(plain || "").split(/(\*\*[^*]+\*\*)/g).map((segment) => {
+          if (segment.startsWith("**") && segment.endsWith("**")) {
+            return "<strong>" + highlightText(segment.slice(2, -2), tokens || []) + "</strong>";
+          }
+          return highlightText(segment, tokens || []);
+        }).join("");
+        const parts = text.split(/(`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
+        return parts.map((part) => {
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return '<span class="code-chip">' + escapeHtml(part.slice(1, -1)) + '</span>';
+          }
+          const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+          if (linkMatch) {
+            const href = linkMatch[2];
+            if (/^(https?:\/\/|#)/i.test(href)) {
+              return '<a href="' + escapeHtml(href) + '" target="_blank" rel="noreferrer">' + highlightText(linkMatch[1], tokens || []) + '</a>';
+            }
+          }
+          return renderPlain(part);
+        }).join("");
+      }
+
+      function buildSearchSnippet(session, tokens, title, recent) {
+        if (!tokens.length) return "";
+        const titleText = String(title || "").toLowerCase();
+        const recentText = String(recent || "").toLowerCase();
+        if (tokens.some((token) => titleText.includes(token) || recentText.includes(token))) return "";
+
+        const sources = [
+          session.last_agent_message,
+          session.search_text,
+          session.first_user_message,
+          session.cwd,
+          session.project
+        ].filter(Boolean).map((value) => String(value));
+
+        for (const source of sources) {
+          const compact = source.replace(/\s+/g, " ").trim();
+          const lower = compact.toLowerCase();
+          let hitIndex = -1;
+          let hitLength = 0;
+          for (const token of tokens) {
+            const index = lower.indexOf(token);
+            if (index !== -1 && (hitIndex === -1 || index < hitIndex)) {
+              hitIndex = index;
+              hitLength = token.length;
+            }
+          }
+          if (hitIndex === -1) continue;
+          const start = Math.max(0, hitIndex - 20);
+          const end = Math.min(compact.length, hitIndex + Math.max(hitLength, 12) + 28);
+          const prefix = start > 0 ? "..." : "";
+          const suffix = end < compact.length ? "..." : "";
+          return prefix + compact.slice(start, end).trim() + suffix;
+        }
+        return "";
+      }
+
+      function renderMarkdownBlock(markdown, tokens) {
+        const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+        const html = [];
+        let listType = "";
+        let inCode = false;
+        let codeLines = [];
+        const splitTableRow = (line) => String(line || "")
+          .trim()
+          .replace(/^\|/, "")
+          .replace(/\|$/, "")
+          .split("|")
+          .map((cell) => cell.trim());
+        const isTableLine = (line) => /^\s*\|.+\|\s*$/.test(line);
+        const isTableDivider = (line) => {
+          const cells = splitTableRow(line);
+          return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+        };
+        const closeList = () => {
+          if (listType) {
+            html.push("</" + listType + ">");
+            listType = "";
+          }
+        };
+        const openList = (type) => {
+          if (listType !== type) {
+            closeList();
+            listType = type;
+            html.push("<" + type + ">");
+          }
+        };
+
+        for (let index = 0; index < lines.length; index += 1) {
+          const rawLine = lines[index];
+          const line = rawLine.replace(/\s+$/, "");
+          if (/^\s*```/.test(line)) {
+            if (inCode) {
+              html.push("<pre><code>" + escapeHtml(codeLines.join("\n")) + "</code></pre>");
+              codeLines = [];
+              inCode = false;
+            } else {
+              closeList();
+              inCode = true;
+            }
+            continue;
+          }
+          if (inCode) {
+            codeLines.push(rawLine);
+            continue;
+          }
+          if (!line.trim()) {
+            closeList();
+            continue;
+          }
+          if (/^\s*---+\s*$/.test(line) || /^\s*\*\*\*+\s*$/.test(line)) {
+            closeList();
+            html.push("<hr>");
+            continue;
+          }
+          if (isTableLine(line) && index + 1 < lines.length) {
+            const dividerLine = lines[index + 1].replace(/\s+$/, "");
+            if (isTableLine(dividerLine) && isTableDivider(dividerLine)) {
+              const headers = splitTableRow(line);
+              const dividerCells = splitTableRow(dividerLine);
+              if (headers.length && headers.length === dividerCells.length) {
+                const rows = [];
+                let rowIndex = index + 2;
+                while (rowIndex < lines.length) {
+                  const rowLine = lines[rowIndex].replace(/\s+$/, "");
+                  if (!isTableLine(rowLine)) break;
+                  const rowCells = splitTableRow(rowLine);
+                  if (rowCells.length !== headers.length) break;
+                  rows.push(rowCells);
+                  rowIndex += 1;
+                }
+                closeList();
+                const headerHtml = headers.map((cell) => "<th>" + renderInlineRich(cell, tokens) + "</th>").join("");
+                const bodyHtml = rows.map((cells) => {
+                  return "<tr>" + cells.map((cell) => "<td>" + renderInlineRich(cell, tokens) + "</td>").join("") + "</tr>";
+                }).join("");
+                html.push('<div class="rich-text-table-wrap"><table><thead><tr>' + headerHtml + '</tr></thead><tbody>' + bodyHtml + '</tbody></table></div>');
+                index = rowIndex - 1;
+                continue;
+              }
+            }
+          }
+          const h2 = line.match(/^##\s+(.+)$/);
+          if (h2) {
+            closeList();
+            html.push("<h2>" + renderInlineRich(h2[1], tokens) + "</h2>");
+            continue;
+          }
+          const h3 = line.match(/^###\s+(.+)$/);
+          if (h3) {
+            closeList();
+            html.push("<h3>" + renderInlineRich(h3[1], tokens) + "</h3>");
+            continue;
+          }
+          const quote = line.match(/^>\s?(.*)$/);
+          if (quote) {
+            closeList();
+            html.push("<blockquote>" + renderInlineRich(quote[1], tokens) + "</blockquote>");
+            continue;
+          }
+          const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+          if (bullet) {
+            openList("ul");
+            html.push("<li>" + renderInlineRich(bullet[1], tokens) + "</li>");
+            continue;
+          }
+          const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+          if (ordered) {
+            openList("ol");
+            html.push("<li>" + renderInlineRich(ordered[1], tokens) + "</li>");
+            continue;
+          }
+          closeList();
+          html.push("<p>" + renderInlineRich(line, tokens) + "</p>");
+        }
+        if (inCode) html.push("<pre><code>" + escapeHtml(codeLines.join("\n")) + "</code></pre>");
+        closeList();
+        return '<div class="rich-text">' + html.join("") + "</div>";
+      }
+
+      function renderRichText(value, tokens) {
+        const text = String(value || "");
+        if (!text) return "";
+        const chunks = [];
+        let cursor = 0;
+        const regex = /<proposed_plan>\s*([\s\S]*?)\s*<\/proposed_plan>/g;
+        let match = regex.exec(text);
+        while (match) {
+          if (match.index > cursor) chunks.push(renderMarkdownBlock(text.slice(cursor, match.index), tokens));
+          chunks.push('<section class="plan-card"><div class="plan-card-title">实施计划</div><div class="plan-card-body">' + renderMarkdownBlock(match[1], tokens) + '</div></section>');
+          cursor = match.index + match[0].length;
+          match = regex.exec(text);
+        }
+        if (cursor < text.length) chunks.push(renderMarkdownBlock(text.slice(cursor), tokens));
+        return chunks.join("");
+      }
+
+      function renderSummaryText(value) {
+        return renderRichText(value, []);
+      }
+
+      function needsTranscriptCollapse(text) {
+        const value = String(text || "");
+        if (!value) return false;
+        const lineCount = value.split(/\r?\n/).length;
+        return value.length > 1400 || lineCount > 18;
+      }
+
+      function parseSummarySections(markdown) {
+        const sections = [];
+        let current = null;
+        String(markdown || "").split(/\r?\n/).forEach((line) => {
+          const match = line.match(/^#{2,3}\s+(.+?)\s*$/);
+          if (match) {
+            current = { title: match[1].trim(), body: [] };
+            sections.push(current);
+          } else if (current) {
+            current.body.push(line);
+          }
+        });
+        return sections.map((section) => ({
+          title: section.title,
+          body: section.body.join("\n").trim()
+        })).filter((section) => section.body);
+      }
+
+      function summarySectionBody(sections, title, aliases) {
+        const names = [title].concat(aliases || []);
+        for (const name of names) {
+          const found = sections.find((section) => section.title === name);
+          if (found && found.body) return found.body;
+        }
+        return "";
+      }
+
+      function buildContextEngineeringBody(sections, fallbackSummary) {
+        const direct = summarySectionBody(sections, "上下文工程卡", []);
+        if (direct) return direct;
+
+        const legacyBlocks = [
+          ["项目和需求", summarySectionBody(sections, "这条对话在干嘛", [])],
+          ["历史推进", summarySectionBody(sections, "按阶段回看", ["按时间回看"])],
+          ["上下文要点", summarySectionBody(sections, "新对话接力包", ["下次继续可以怎么说"])]
+        ].filter((block) => block[1]);
+        if (legacyBlocks.length) {
+          return legacyBlocks.map((block) => "### " + block[0] + "\n" + block[1]).join("\n\n");
+        }
+
+        return String(fallbackSummary || "").trim();
+      }
+
+      function buildContextEngineeringText(detail, memory) {
+        if (!detail || !memory || !memory.summary) return "";
+        const sections = parseSummarySections(memory.summary);
+        const body = buildContextEngineeringBody(sections, memory.summary);
+        const latestTime = detail.updated_at || memory.generated_at || "";
+        const metadata = [
+          "source_kind: " + (detail.source_kind || memory.source_kind || "-"),
+          "session_id: " + (detail.session_id || memory.session_id || "-"),
+          "forked_from_id: " + (detail.forked_from_id || memory.forked_from_id || "-"),
+          "cwd: " + (detail.cwd || "-"),
+          "latest_time: " + (formatDate(latestTime, true) || latestTime || "-")
+        ].join("\n");
+        return [
+          "## 上下文工程卡",
+          body.trim(),
+          "",
+          "## 上下文定位",
+          metadata,
+          "",
+          "说明: 先按上面的上下文工程卡理解当前状态；只有需要核对细节或更新历史时，再按 session_id 回查原始会话。"
+        ].join("\n").trim();
+      }
+
+      function currentSelectedDetail() {
+        const filtered = getFilteredSessions();
+        const selected = getSelectedSummary(filtered);
+        return selected ? state.detailCache.get(sessionKey(selected)) || selected : null;
+      }
+
+      function normalizeSession(session) {
+        const sourceKind = session.source_kind || "codex";
+        const sourceLabel = session.source_label || sourceLabels[sourceKind] || sourceKind;
+        const sessionType = session.session_type || "main";
+        const sessionScope = session.session_scope || "current";
+        const summaryStatus = session.summary_status || "none";
+        return {
+          ...session,
+          source_kind: sourceKind,
+          source_label: sourceLabel,
+          session_type: sessionType,
+          session_type_label: typeLabels[sessionType] || session.session_type_label || "普通聊天",
+          session_scope: sessionScope,
+          session_scope_label: scopeLabels[sessionScope] || session.session_scope_label || "当前历史",
+          summary_status: summaryStatus,
+          summary_status_label: summaryLabels[summaryStatus] || "未总结",
+          summary_delta_turns: Number(session.summary_delta_turns || 0),
+          _updatedMs: session.updated_at ? Date.parse(session.updated_at) || 0 : 0
+        };
+      }
+
+      function buildProjectOptions() {
+        const current = state.project;
+        const options = ['<option value="all">全部项目</option>'];
+        (state.catalog.projects || []).forEach((item) => {
+          options.push('<option value="' + escapeHtml(item.project) + '">' + escapeHtml(item.project) + " (" + item.count + ")</option>");
+        });
+        els.projectFilter.innerHTML = options.join("");
+        els.projectFilter.value = Array.from(els.projectFilter.options).some((option) => option.value === current) ? current : "all";
+        state.project = els.projectFilter.value;
+      }
+
+      function matchesSession(session, tokens) {
+        if (state.summaryStatus !== "all" && (session.summary_status || "none") !== state.summaryStatus) return false;
+        if (state.sessionScope !== "all" && (session.session_scope || "current") !== state.sessionScope) return false;
+        if (state.project !== "all" && session.project !== state.project) return false;
+        if (state.source !== "all" && session.source_kind !== state.source) return false;
+        if (state.sessionType !== "all" && (session.session_type || "main") !== state.sessionType) return false;
+        if (!tokens.length) return true;
+
+        const haystack = [
+          session.search_text,
+          session.session_type_label,
+          session.session_scope_label,
+          session.summary_status_label,
+          session.agent_nickname,
+          session.agent_role,
+          session.title_clean,
+          session.cwd,
+          session.project,
+          session.first_user_message,
+          session.last_user_message,
+          session.last_agent_message,
+          session.source_label
+        ].join(" ").toLowerCase();
+        return tokens.every((token) => haystack.includes(token));
+      }
+
+      function getFilteredSessions() {
+        const tokens = getQueryTokens();
+        return state.sessions.filter((session) => matchesSession(session, tokens));
+      }
+
+      function getSelectedSummary(filtered) {
+        return filtered.find((session) => sessionKey(session) === state.selectedKey) || null;
+      }
+
+      function ensureSelection(filtered) {
+        if (!filtered.length) {
+          state.selectedKey = "";
+          return;
+        }
+        if (!filtered.some((session) => sessionKey(session) === state.selectedKey)) {
+          state.selectedKey = sessionKey(filtered[0]);
+        }
+      }
+
+      function renderList(filtered) {
+        els.resultCount.textContent = filtered.length;
+        const typeCounts = state.catalog.type_counts || {};
+        const summaryCounts = state.catalog.summary_counts || {};
+        const statSummary = [
+          "普通聊天 " + String(typeCounts.main || 0),
+          "子智能体 " + String(typeCounts.subagent || 0),
+          "已总结 " + String(summaryCounts.fresh || 0),
+          "有新增 " + String(summaryCounts.stale || 0)
+        ].join(" · ");
+        els.resultInlineStats.textContent = statSummary;
+
+        if (!filtered.length) {
+          els.sessionList.innerHTML = '<div class="empty-state">没有找到匹配的会话。<br>试试项目名、关键词，或者先清空筛选。</div>';
+          return;
+        }
+
+        const tokens = getQueryTokens();
+        const visible = filtered.slice(0, state.visibleLimit);
+        const listHtml = visible.map((session) => {
+          const activeClass = sessionKey(session) === state.selectedKey ? "active" : "";
+          const title = session.first_user_message || session.title_clean || session.session_id;
+          const recent = session.last_user_message || title;
+          const matchSnippet = buildSearchSnippet(session, tokens, title, recent);
+          const messageCount = Number(session.message_count || 0);
+          const isForked = Boolean(session.forked_from_id);
+          const tooltip = [
+            session.source_label || "",
+            session.session_type_label || "普通聊天",
+            session.parent_thread_id ? ("父会话: " + session.parent_thread_id) : "",
+            session.forked_from_id ? ("Fork 来源: " + session.forked_from_id) : "",
+            session.cwd ? ("工作目录: " + session.cwd) : "",
+            session.session_id ? ("ID: " + session.session_id) : ""
+          ].filter(Boolean).join("\n");
+          return '' +
+            '<button class="session-card ' + activeClass + '" data-session-key="' + escapeHtml(sessionKey(session)) + '" title="' + escapeHtml(tooltip) + '" type="button">' +
+              '<div class="session-card-head">' +
+                '<div class="session-card-title">' + highlightText(title, tokens) + '</div>' +
+                '<span class="session-card-arrow">›</span>' +
+              '</div>' +
+              '<div class="session-card-recent">最近：' + highlightText(recent, tokens) + '</div>' +
+              (matchSnippet ? '<div class="session-card-match">命中：' + highlightText(matchSnippet, tokens) + '</div>' : "") +
+              '<div class="session-card-badges">' +
+                '<span class="source-badge" data-source="' + escapeHtml(session.source_kind) + '">' + escapeHtml(session.source_label || "") + '</span>' +
+                '<span class="type-badge" data-type="' + escapeHtml(session.session_type || "main") + '">' + escapeHtml(session.session_type_label || "普通聊天") + '</span>' +
+                '<span class="scope-chip">' + escapeHtml(session.session_scope_label || "当前历史") + '</span>' +
+                '<span class="summary-chip" data-summary="' + escapeHtml(session.summary_status || "none") + '">' + escapeHtml(session.summary_status_label || "未总结") + '</span>' +
+                (isForked ? '<span class="fork-chip" title="Fork 来源：' + escapeHtml(session.forked_from_id) + '">Fork</span>' : "") +
+              '</div>' +
+              '<div class="session-card-foot">' +
+                '<span class="project-name" title="' + escapeHtml(session.project || "无项目") + '">' + escapeHtml(session.project || "无项目") + '</span>' +
+                '<span>最新 ' + escapeHtml(formatDate(session.updated_at || session.started_at, true)) + '</span>' +
+                '<span>' + escapeHtml(String(session.turn_count || 0)) + ' 提问</span>' +
+                (messageCount ? '<span>' + escapeHtml(String(messageCount)) + ' 消息</span>' : "") +
+              '</div>' +
+            '</button>';
+        }).join("");
+
+        const remaining = filtered.length - visible.length;
+        const footerHtml = '<div class="list-footer">' +
+          '<span>已显示 ' + escapeHtml(String(visible.length)) + ' / ' + escapeHtml(String(filtered.length)) + '</span>' +
+          (remaining > 0 ? '<button id="loadMoreButton" class="button load-more" type="button">加载更多 ' + escapeHtml(String(Math.min(100, remaining))) + ' 条</button>' : '<span>已全部显示</span>') +
+          '</div>';
+        els.sessionList.innerHTML = listHtml + footerHtml;
+
+        els.sessionList.querySelectorAll("[data-session-key]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.selectedKey = button.getAttribute("data-session-key");
+            render();
+          });
+        });
+        const loadMoreButton = document.getElementById("loadMoreButton");
+        if (loadMoreButton) {
+          loadMoreButton.addEventListener("click", () => {
+            state.visibleLimit += 100;
+            render();
+          });
+        }
+      }
+
+      function renderTranscript(detail, tokens) {
+        const items = Array.isArray(detail && detail.transcript_items) ? detail.transcript_items : [];
+        if (!items.length) {
+          return '<div class="empty-state" style="min-height: 220px;">这条会话暂时没有可展示的对话内容。<br>可以先看“对话目录”，再决定是否 resume。</div>';
+        }
+
+        let firstMatchedIndex = -1;
+        let userTurnIndex = 0;
+        let rawTurnCursor = 0;
+        const usedRawTurnIndexes = new Set();
+        const rawTurns = Array.isArray(detail && detail.user_turns) ? detail.user_turns : [];
+        const turnMatchKey = (value) => String(value || "").replace(/\s+/g, " ").trim().slice(0, 80);
+        const nextRawTurnIndex = (text, explicitIndex) => {
+          const numericExplicit = Number(explicitIndex || 0);
+          if (numericExplicit > 0) {
+            usedRawTurnIndexes.add(numericExplicit);
+            rawTurnCursor = Math.max(rawTurnCursor, numericExplicit);
+            return numericExplicit;
+          }
+          const key = turnMatchKey(text);
+          for (let index = rawTurnCursor; index < rawTurns.length; index += 1) {
+            const candidateIndex = Number(rawTurns[index] && rawTurns[index].index || index + 1);
+            if (usedRawTurnIndexes.has(candidateIndex)) continue;
+            const candidate = turnMatchKey(rawTurns[index] && rawTurns[index].text);
+            if (candidate && key && (key.startsWith(candidate) || candidate.startsWith(key))) {
+              rawTurnCursor = index + 1;
+              usedRawTurnIndexes.add(candidateIndex);
+              return candidateIndex;
+            }
+          }
+          userTurnIndex += 1;
+          return userTurnIndex;
+        };
+        const displayItems = [];
+        for (let index = 0; index < items.length; index += 1) {
+          const item = items[index] || {};
+          if ((item.kind || "") !== "tool") {
+            displayItems.push(item);
+            continue;
+          }
+          const tools = [item];
+          while (index + 1 < items.length && ((items[index + 1] || {}).kind || "") === "tool") {
+            index += 1;
+            tools.push(items[index]);
+          }
+          displayItems.push({
+            kind: "tool_group",
+            label: "工具",
+            timestamp: tools[tools.length - 1] && tools[tools.length - 1].timestamp,
+            tools,
+            text: tools.map((tool, toolIndex) => {
+              const label = tool.label || tool.tool_name || ("工具 " + String(toolIndex + 1));
+              return "[" + String(toolIndex + 1) + "] " + label + "\n" + String(tool.text || "").trim();
+            }).join("\n\n")
+          });
+        }
+
+        const html = displayItems.map((item, index) => {
+          const text = String(item.text || "");
+          const rawKind = item.kind || "ai";
+          const kind = rawKind === "tool_group" ? "tool" : rawKind;
+          const lowerText = text.toLowerCase();
+          const isMatch = kind !== "tool" && tokens.length && tokens.some((token) => lowerText.includes(token));
+          if (isMatch && firstMatchedIndex === -1) firstMatchedIndex = index;
+          const rawUserTurnIndex = kind === "user" ? nextRawTurnIndex(text, item.user_turn_index) : "";
+          const label = item.label || (kind === "user" ? "用户" : kind === "tool" ? "工具" : "AI");
+          const toolCount = rawKind === "tool_group" ? (Array.isArray(item.tools) ? item.tools.length : 1) : 1;
+          const collapsed = kind !== "tool" && needsTranscriptCollapse(text);
+          const isInstruction = kind === "developer" || kind === "system";
+          const body = kind === "tool"
+            ? '<details class="tool-details"><summary>工具执行已折叠（共 ' + escapeHtml(String(toolCount)) + ' 次调用）</summary><div class="transcript-text">' + escapeHtml(text) + '</div></details>'
+            : isInstruction
+              ? '<details class="tool-details meta-details"><summary>' + escapeHtml(label) + '内容已折叠</summary><div class="transcript-text">' + renderRichText(text, tokens) + '</div></details>'
+            : '<div class="transcript-text' + (collapsed ? " collapsed" : "") + '" data-expandable="' + (collapsed ? "true" : "false") + '">' + renderRichText(text, tokens) + '</div>' +
+              (collapsed ? '<button class="transcript-expand" type="button" data-action="transcript-toggle">展开</button>' : "");
+          return '' +
+            '<article class="transcript-card" data-kind="' + escapeHtml(kind) + '"' + (kind === "user" ? ' data-user-turn="' + escapeHtml(rawUserTurnIndex) + '"' : "") + (firstMatchedIndex === index ? ' data-first-query-match="true"' : "") + '>' +
+              '<div class="transcript-head">' +
+                '<span class="transcript-tag">' + escapeHtml(label) + '</span>' +
+                '<span class="transcript-time">' + escapeHtml(formatDate(item.timestamp, true)) + '</span>' +
+              '</div>' +
+              body +
+            '</article>';
+        }).join("");
+        return '<section class="transcript-stack">' + html + '</section>';
+      }
+
+      function updateMatchNav() {
+        const hasMatches = transcriptMarks.length > 0;
+        const hasQuery = getQueryTokens().length > 0;
+        els.matchNav.classList.toggle("visible", hasQuery);
+        els.matchCount.textContent = hasMatches ? (String(activeMatchIndex + 1) + " / " + transcriptMarks.length) : "0 / 0";
+        els.prevMatchButton.disabled = !hasMatches;
+        els.nextMatchButton.disabled = !hasMatches;
+      }
+
+      function focusMatch(index) {
+        if (!transcriptMarks.length) {
+          activeMatchIndex = -1;
+          els.detailRoot.querySelectorAll(".transcript-card.match-focus").forEach((card) => card.classList.remove("match-focus"));
+          updateMatchNav();
+          return;
+        }
+        const total = transcriptMarks.length;
+        activeMatchIndex = ((index % total) + total) % total;
+        transcriptMarks.forEach((mark, markIndex) => mark.classList.toggle("active-match", markIndex === activeMatchIndex));
+        els.detailRoot.querySelectorAll(".transcript-card.match-focus").forEach((card) => card.classList.remove("match-focus"));
+        const activeMark = transcriptMarks[activeMatchIndex];
+        const activeCard = activeMark.closest(".transcript-card");
+        if (activeCard) activeCard.classList.add("match-focus");
+        (activeCard || activeMark).scrollIntoView({ block: "center", behavior: "smooth" });
+        updateMatchNav();
+      }
+
+      function renderMemoryCard(selected) {
+        const key = sessionKey(selected);
+        const hasSummaryEntry = state.summaryCache.has(key);
+        const memory = hasSummaryEntry ? state.summaryCache.get(key) : null;
+        const error = state.summaryErrors.get(key) || "";
+        const loading = state.loadingSummaryKey === key;
+        const generating = state.generatingSummaryKey === key;
+        const collapsed = state.collapsedMemory.has(key);
+        const turnCount = Number(selected.turn_count || 0);
+        const delta = memory ? Math.max(0, Number(memory.delta_turns || (turnCount - Number(memory.summarized_turn_count || 0)))) : 0;
+        const inputMeta = memory && memory.input_metadata ? memory.input_metadata : null;
+        const inputBadge = inputMeta
+          ? (inputMeta.input_truncated ? "仅最新自然语言 " + inputMeta.included_items + " 条" : "全量自然语言 " + inputMeta.included_items + " 条")
+          : "手动发送";
+        const badges = [
+          '<span class="memory-badge">' + (memory ? "已总结" : "未总结") + '</span>',
+          memory && delta ? '<span class="memory-badge stale">新增 ' + escapeHtml(delta) + ' 个提问</span>' : "",
+          memory ? '<span class="memory-badge">' + escapeHtml(memory.model || "Kimi") + '</span>' : '<span class="memory-badge">Kimi</span>',
+          '<span class="memory-badge' + (inputMeta && inputMeta.input_truncated ? " stale" : "") + '">' + escapeHtml(inputBadge) + '</span>'
+        ].filter(Boolean).join("");
+        const primaryAction = memory ? "更新上下文工程卡" : "生成上下文工程卡";
+        const body = collapsed ? "" : renderMemoryBody(memory, error, loading, generating);
+        return '' +
+          '<section class="memory-card" data-memory-card="' + escapeHtml(key) + '">' +
+            '<div class="memory-head">' +
+              '<div>' +
+                '<div class="memory-title">上下文工程卡 ' + badges + '</div>' +
+                '<div class="memory-subtitle">只发送用户自然语言和 AI 回复；工具、日志、命令输出不发送。</div>' +
+              '</div>' +
+              '<div class="memory-actions">' +
+                '<button class="button primary" type="button" data-action="summary-generate"' + (generating || !state.apiMode ? " disabled" : "") + '>' + escapeHtml(generating ? "生成中..." : primaryAction) + '</button>' +
+                '<button class="button" type="button" data-action="summary-copy-context"' + (!memory ? " disabled" : "") + '>复制上下文工程卡</button>' +
+                '<button class="button" type="button" data-action="summary-copy"' + (!memory ? " disabled" : "") + '>复制完整总结</button>' +
+                '<button class="button" type="button" data-action="summary-toggle">' + escapeHtml(collapsed ? "展开" : "折叠") + '</button>' +
+              '</div>' +
+            '</div>' +
+            body +
+          '</section>';
+      }
+
+      function renderMemoryPanel(summary, detail) {
+        if (!summary) {
+          els.memorySubtitle.textContent = "先在左侧选一条会话";
+          els.memoryRoot.innerHTML = '<div class="empty-state" style="min-height: 220px;">左侧先选一条会话，再看上下文工程卡。</div>';
+          return;
+        }
+
+        const selected = detail || summary;
+        els.memorySubtitle.textContent = (selected.title_clean || selected.first_user_message || selected.session_id || "当前会话").slice(0, 80);
+        if (!detail && state.apiMode) {
+          els.memoryRoot.innerHTML = '<div class="empty-state" style="min-height: 220px;">正在加载这条会话的完整记录...</div>';
+          return;
+        }
+        els.memoryRoot.innerHTML = renderMemoryCard(selected);
+      }
+
+      function renderMemoryBody(memory, error, loading, generating) {
+        const sectionsConfig = [
+          { title: "项目背景", aliases: ["这条对话在干嘛", "项目和需求"], empty: "等待项目背景" },
+          { title: "用户需求", aliases: ["核心目标", "目标"], empty: "等待用户需求" },
+          { title: "关键变更历史", aliases: ["按阶段回看", "按时间回看", "历史推进"], empty: "等待阶段回看", className: "wide" },
+          { title: "已完成事实", aliases: ["当前结论", "已完成"], empty: "等待完成事实" },
+          { title: "可能继续方向", aliases: ["下次继续可以怎么说", "新对话接力包"], empty: "等待继续方向" },
+          { title: "给我的 Codex 协作建议", aliases: ["协作建议"], empty: "等待协作建议", className: "wide" }
+        ];
+        const renderSection = (title, body, empty) => {
+          const config = sectionsConfig.find((section) => section.title === title) || {};
+          return '<section class="memory-section' + (empty ? " empty" : "") + (config.className ? " " + escapeHtml(config.className) : "") + '">' +
+            '<h3>' + escapeHtml(title) + '</h3>' +
+            '<div>' + (body ? renderSummaryText(body) : escapeHtml(empty || "等待生成")) + '</div>' +
+          '</section>';
+        };
+        const placeholderGrid = '<div class="memory-content">' + sectionsConfig.map((section) => {
+          return renderSection(section.title, "", section.empty);
+        }).join("") + "</div>";
+
+        if (generating) {
+          return '<div class="memory-body">' + placeholderGrid + '<div class="memory-subtitle">Kimi 正在提炼这条会话...</div></div>';
+        }
+        if (error) {
+          return '<div class="memory-body"><div class="memory-error">' + escapeHtml(error) + '</div>' + placeholderGrid + '</div>';
+        }
+        if (loading && !memory) {
+          return '<div class="memory-body">' + placeholderGrid + '<div class="memory-subtitle">正在读取本地总结缓存...</div></div>';
+        }
+        if (!memory) {
+          return '<div class="memory-body">' + placeholderGrid + '</div>';
+        }
+
+        const sections = parseSummarySections(memory.summary);
+        const renderedSections = sectionsConfig.map((section) => {
+          const body = summarySectionBody(sections, section.title, section.aliases);
+          return {
+            html: renderSection(section.title, body, body ? "" : "这部分暂时为空"),
+            hasBody: Boolean(body)
+          };
+        });
+        const fallbackBody = buildContextEngineeringBody(sections, memory.summary);
+        const fallback = '<section class="memory-section full"><h3>完整总结</h3><div>' + renderSummaryText(fallbackBody || memory.summary) + '</div></section>';
+        const hasMappedContent = renderedSections.some((section) => section.hasBody);
+        const sectionHtml = renderedSections.map((section) => section.html).join("");
+        const meta = [
+          "生成于 " + formatDate(memory.generated_at, true),
+          "总结到 " + String(memory.summarized_turn_count || 0) + " 个提问",
+          memory.delta_turns ? "新增 " + String(memory.delta_turns) + " 个提问待更新" : "暂无新增提问"
+        ].join(" · ");
+        return '<div class="memory-body"><div class="memory-content">' + (hasMappedContent ? sectionHtml : fallback) + '</div><div class="memory-subtitle">' + escapeHtml(meta) + '</div></div>';
+      }
+
+      function renderDetail(summary, detail) {
+        if (!summary) {
+          els.detailRoot.innerHTML = '<div class="empty-state">左侧选一条会话。<br>如果刚刷新完数据，可以先清空筛选再看。</div>';
+          els.detailMetaBar.innerHTML = "";
+          transcriptMarks = [];
+          activeMatchIndex = -1;
+          updateMatchNav();
+          els.copyResumeButton.disabled = true;
+          els.replayEditorButton.disabled = true;
+          els.memoryButton.disabled = true;
+          els.outlineButton.disabled = true;
+          renderMemoryPanel(null, null);
+          return;
+        }
+
+        const selected = detail || summary;
+        const cwd = selected.cwd || selected.project || "";
+        const key = sessionKey(selected);
+        els.copyResumeButton.disabled = false;
+        els.replayEditorButton.disabled = !state.apiMode || state.openingReplayEditorKey === key;
+        els.memoryButton.disabled = false;
+        els.outlineButton.disabled = false;
+        els.copyResumeButton.textContent = selected.source_kind === "claude_code" ? "复制 Claude resume 命令" : "复制 resume 命令";
+        els.replayEditorButton.textContent = state.openingReplayEditorKey === key ? "打开中..." : "打开 Replay Editor";
+
+        els.detailMetaBar.innerHTML = [
+          '<span class="source-badge" data-source="' + escapeHtml(selected.source_kind) + '">' + escapeHtml(selected.source_label || "") + '</span>',
+          '<span class="meta-pill">最新 ' + escapeHtml(formatDate(selected.updated_at || selected.started_at, true)) + '</span>',
+          '<span class="meta-pill">' + escapeHtml(String(selected.turn_count || 0)) + ' 提问</span>',
+          selected.message_count ? '<span class="meta-pill">' + escapeHtml(String(selected.message_count)) + ' 条消息</span>' : "",
+          selected.session_id ? '<span class="meta-pill id-pill" title="' + escapeHtml(selected.session_id) + '">ID ' + escapeHtml(shortSessionId(selected.session_id)) + '</span>' : "",
+          selected.forked_from_id ? '<span class="meta-pill id-pill" title="' + escapeHtml(selected.forked_from_id) + '">Fork ' + escapeHtml(shortSessionId(selected.forked_from_id)) + '</span>' : "",
+          cwd ? '<span class="meta-pill cwd-pill" title="' + escapeHtml(cwd) + '">目录 ' + escapeHtml(cwd) + '</span>' : ""
+        ].filter(Boolean).join("");
+
+        if (!detail && state.apiMode) {
+          els.detailRoot.innerHTML = '<div class="empty-state" style="min-height: 220px;">正在加载这条会话的完整记录...</div>';
+          renderMemoryPanel(summary, null);
+          transcriptMarks = [];
+          activeMatchIndex = -1;
+          updateMatchNav();
+          return;
+        }
+
+        els.detailRoot.innerHTML = renderTranscript(selected, getQueryTokens());
+        renderMemoryPanel(selected, selected);
+        transcriptMarks = Array.from(els.detailRoot.querySelectorAll(".transcript-stack mark"));
+        activeMatchIndex = -1;
+        if (state.apiMode && !state.summaryCache.has(sessionKey(selected)) && !state.summaryErrors.has(sessionKey(selected)) && state.loadingSummaryKey !== sessionKey(selected)) {
+          loadSummary(selected);
+        }
+        if (getQueryTokens().length && transcriptMarks.length) focusMatch(0);
+        else {
+          els.detailRoot.scrollTop = 0;
+          updateMatchNav();
+        }
+      }
+
+      function renderOutline(summary, detail) {
+        const selected = detail || summary;
+        if (!selected || !Array.isArray(selected.user_turns) || !selected.user_turns.length) {
+          els.outlineList.innerHTML = '<li class="empty-state" style="min-height: 220px;">这条会话没有抓到可用的用户提问目录。</li>';
+          els.outlineSubtitle.textContent = "没有可展示的用户提问";
+          return;
+        }
+
+        const tokens = state.outlineQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const turns = tokens.length
+          ? selected.user_turns.filter((turn) => tokens.every((token) => String(turn.text || "").toLowerCase().includes(token)))
+          : selected.user_turns;
+        const displayTurns = turns.slice().reverse();
+        els.outlineSubtitle.textContent = (selected.title_clean || selected.session_id) + " · 最新在前 · " + turns.length + " / " + selected.user_turns.length + " 个用户提问";
+
+        if (!displayTurns.length) {
+          els.outlineList.innerHTML = '<li class="empty-state" style="min-height: 220px;">这个目录里没有匹配的用户提问。</li>';
+          return;
+        }
+
+        els.outlineList.innerHTML = displayTurns.map((turn) => {
+          return '' +
+            '<li class="outline-item">' +
+              '<button class="outline-jump" type="button" data-outline-turn="' + escapeHtml(turn.index || "") + '">' +
+                '<div class="outline-index">' + escapeHtml(turn.index || "") + '</div>' +
+                '<div>' +
+                  '<div class="outline-text">' + highlightText(turn.text || "", tokens) + '</div>' +
+                  '<div class="outline-time">' + escapeHtml(formatDate(turn.timestamp, true)) + '</div>' +
+                '</div>' +
+              '</button>' +
+            '</li>';
+        }).join("");
+      }
+
+      async function loadSummary(summary) {
+        if (!summary || !state.apiMode) return;
+        const key = sessionKey(summary);
+        if (state.summaryCache.has(key) || state.loadingSummaryKey === key) return;
+        state.loadingSummaryKey = key;
+        renderDetail(summary, state.detailCache.get(key));
+        try {
+          const response = await fetch("/api/session/" + encodeURIComponent(summary.source_kind) + "/" + encodeURIComponent(summary.detail_id || summary.session_id) + "/summary", { cache: "no-store" });
+          if (response.status === 404) {
+            state.summaryCache.set(key, null);
+            updateSummaryStatusForKey(key, null);
+          } else if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.error || "总结缓存读取失败");
+          } else {
+            const body = await response.json();
+            state.summaryCache.set(key, body);
+            updateSummaryStatusForKey(key, body);
+          }
+          state.summaryErrors.delete(key);
+        } catch (error) {
+          state.summaryErrors.set(key, error && error.message ? error.message : String(error));
+        } finally {
+          state.loadingSummaryKey = "";
+          const filtered = getFilteredSessions();
+          const current = getSelectedSummary(filtered);
+          if (current && sessionKey(current) === key) render();
+        }
+      }
+
+      async function generateSummary() {
+        const detail = currentSelectedDetail();
+        if (!detail || !state.apiMode) return;
+        const key = sessionKey(detail);
+        if (state.generatingSummaryKey) return;
+        state.generatingSummaryKey = key;
+        state.summaryErrors.delete(key);
+        render();
+        closeMemory();
+        setStatus("正在后台生成上下文工程卡", "");
+        try {
+          const response = await fetch("/api/session/" + encodeURIComponent(detail.source_kind) + "/" + encodeURIComponent(detail.detail_id || detail.session_id) + "/summary", {
+            method: "POST",
+            cache: "no-store"
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.error || "Kimi 总结生成失败");
+          state.summaryCache.set(key, body);
+          updateSummaryStatusForKey(key, body);
+          state.summaryErrors.delete(key);
+          setStatus("上下文工程卡已更新", "");
+        } catch (error) {
+          state.summaryErrors.set(key, error && error.message ? error.message : String(error));
+          setStatus("总结生成失败", "error");
+        } finally {
+          state.generatingSummaryKey = "";
+          const filtered = getFilteredSessions();
+          const current = getSelectedSummary(filtered);
+          if (current && sessionKey(current) === key) render();
+        }
+      }
+
+      function copyCurrentSummary() {
+        const detail = currentSelectedDetail();
+        if (!detail) return;
+        const memory = state.summaryCache.get(sessionKey(detail));
+        if (memory && memory.summary) copyText(memory.summary);
+      }
+
+      function toggleMemoryCard() {
+        const detail = currentSelectedDetail();
+        if (!detail) return;
+        const key = sessionKey(detail);
+        if (state.collapsedMemory.has(key)) state.collapsedMemory.delete(key);
+        else state.collapsedMemory.add(key);
+        render();
+      }
+
+      function jumpToUserTurn(turnIndex) {
+        closeOutline();
+        const numericTurn = Number(turnIndex || 0);
+        const cards = Array.from(els.detailRoot.querySelectorAll("[data-user-turn]"));
+        let target = cards.find((card) => Number(card.getAttribute("data-user-turn") || 0) === numericTurn);
+        if (!target && numericTurn > 0) {
+          target = cards.find((card) => Number(card.getAttribute("data-user-turn") || 0) > numericTurn) || cards[cards.length - 1];
+          if (target) setStatus("这条目录项是隐藏的系统上下文，已跳到最近的可见提问", "busy");
+        }
+        if (!target) return;
+        cards.forEach((card) => card.classList.remove("jump-focus"));
+        target.classList.add("jump-focus");
+        target.scrollIntoView({ block: "start", behavior: "smooth" });
+        window.setTimeout(() => target.classList.remove("jump-focus"), 1800);
+      }
+
+      async function loadDetail(summary) {
+        if (!summary) return;
+        const key = sessionKey(summary);
+        if (state.detailCache.has(key)) return;
+        if (!state.apiMode) {
+          state.detailCache.set(key, summary);
+          return;
+        }
+
+        state.loadingDetailKey = key;
+        renderDetail(summary, null);
+        try {
+          const response = await fetch("/api/session/" + encodeURIComponent(summary.source_kind) + "/" + encodeURIComponent(summary.detail_id || summary.session_id), { cache: "no-store" });
+          if (!response.ok) throw new Error("detail request failed");
+          const detail = normalizeSession(await response.json());
+          state.detailCache.set(key, detail);
+        } catch (error) {
+          state.detailCache.set(key, {
+            ...summary,
+            transcript_items: [],
+            user_turns: []
+          });
+          setStatus("详情加载失败", "error");
+        } finally {
+          state.loadingDetailKey = "";
+          const filtered = getFilteredSessions();
+          const current = getSelectedSummary(filtered);
+          if (current && sessionKey(current) === key) render();
+        }
+      }
+
+      function render() {
+        const filtered = getFilteredSessions();
+        ensureSelection(filtered);
+        const selected = getSelectedSummary(filtered);
+        const detail = selected ? state.detailCache.get(sessionKey(selected)) : null;
+        renderList(filtered);
+        renderDetail(selected, detail);
+        renderOutline(selected, detail);
+        if (selected && !detail) loadDetail(selected);
+      }
+
+      async function loadIndex(preserveSelection) {
+        setStatus("加载索引中", "busy");
+        try {
+          const response = await fetch("/api/index", { cache: "no-store" });
+          if (!response.ok) throw new Error("api index unavailable");
+          const catalog = await response.json();
+          state.apiMode = true;
+          applyCatalog(catalog, preserveSelection);
+          setStatus("本地服务已连接", "");
+        } catch {
+          state.apiMode = false;
+          applyCatalog({ sessions: [], projects: [] }, preserveSelection);
+          setStatus("本地服务不可用，请用 Open-SessionExplorer.bat 打开", "error");
+        }
+      }
+
+      function applyCatalog(catalog, preserveSelection) {
+        const previousKey = preserveSelection ? state.selectedKey : "";
+        state.catalog = catalog || { sessions: [], projects: [] };
+        state.sessions = Array.isArray(state.catalog.sessions)
+          ? state.catalog.sessions.map(normalizeSession).sort((a, b) => b._updatedMs - a._updatedMs)
+          : [];
+        state.lastGeneratedAt = state.catalog.generated_at || "";
+        state.lastRefreshAt = state.lastGeneratedAt || new Date().toISOString();
+        scheduleNextAutoRefresh(Date.now());
+        state.detailCache.clear();
+        state.summaryCache.clear();
+        state.summaryErrors.clear();
+        state.selectedKey = previousKey && state.sessions.some((session) => sessionKey(session) === previousKey)
+          ? previousKey
+          : (state.sessions[0] ? sessionKey(state.sessions[0]) : "");
+        state.visibleLimit = 100;
+        buildProjectOptions();
+        render();
+      }
+
+      function statusWithCatalog(baseText) {
+        const summary = catalogSummaryText();
+        return summary ? (baseText ? baseText + " · " + summary : summary) : baseText;
+      }
+
+      async function refreshLatest() {
+        if (!state.apiMode) {
+          window.location.reload();
+          return;
+        }
+        if (state.generatingSummaryKey || state.lastKnownRunning) return;
+        els.refreshButton.disabled = true;
+        setStatus("刷新中 · 上次 " + formatDate(state.lastRefreshAt, true), "busy");
+        try {
+          await fetch("/api/refresh", { method: "POST", cache: "no-store" });
+          state.lastKnownRunning = true;
+        } catch {
+          setStatus("刷新请求失败", "error");
+          els.refreshButton.disabled = false;
+        }
+      }
+
+      async function pollStatus() {
+        if (!state.apiMode) return;
+        try {
+          const response = await fetch("/api/status", { cache: "no-store" });
+          if (!response.ok) return;
+          const status = await response.json();
+          state.lastKnownRunning = Boolean(status.running);
+          els.refreshButton.disabled = Boolean(status.running);
+          if (status.running) {
+            setStatus(status.phase === "exporting" ? "同步本机记录中" : "重建索引中", "busy");
+            return;
+          }
+          if (status.last_error) {
+            setStatus("上次刷新失败", "error");
+            return;
+          }
+          if (status.generated_at && status.generated_at !== state.lastGeneratedAt) {
+            state.lastRefreshAt = status.generated_at;
+            scheduleNextAutoRefresh(Date.now());
+            await loadIndex(true);
+            return;
+          }
+          const nextText = state.nextAutoRefreshAt ? " · 下次自动 " + formatDuration(state.nextAutoRefreshAt - Date.now()) : "";
+          const lastText = state.lastRefreshAt ? " · 上次 " + formatDate(state.lastRefreshAt, true) : "";
+          setStatus(statusWithCatalog((status.has_new_data ? "已有新数据，可刷新" : "本地服务已连接") + lastText + nextText), status.has_new_data ? "busy" : "");
+        } catch {
+          setStatus("本地服务断开", "error");
+        }
+      }
+
+      async function maybeAutoRefresh() {
+        if (!state.apiMode || state.generatingSummaryKey || state.lastKnownRunning) return;
+        if (!state.nextAutoRefreshAt) scheduleNextAutoRefresh(Date.now());
+        if (Date.now() < state.nextAutoRefreshAt) return;
+        await refreshLatest();
+        scheduleNextAutoRefresh(Date.now());
+      }
+
+      function showCopied(button) {
+        if (!button) return;
+        const original = button.textContent;
+        button.textContent = "已复制";
+        window.setTimeout(() => { button.textContent = original; }, 1200);
+      }
+
+      function fallbackCopy(text, button) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+          document.execCommand("copy");
+          showCopied(button || els.copyResumeButton);
+        } finally {
+          document.body.removeChild(textarea);
+        }
+      }
+
+      function copyText(text, button) {
+        if (!text) return;
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(() => {
+            showCopied(button || els.copyResumeButton);
+          }).catch(() => fallbackCopy(text, button));
+          return;
+        }
+        fallbackCopy(text, button);
+      }
+
+      async function openReplayEditor() {
+        const filtered = getFilteredSessions();
+        const selected = getSelectedSummary(filtered);
+        if (!selected || !state.apiMode) return;
+
+        const key = sessionKey(selected);
+        const popup = window.open("about:blank", "_blank");
+        state.openingReplayEditorKey = key;
+        setStatus("正在打开 Replay Editor", "busy");
+        render();
+        try {
+          const response = await fetch(
+            "/api/session/" + encodeURIComponent(selected.source_kind) + "/" + encodeURIComponent(selected.detail_id || selected.session_id) + "/replay-editor",
+            { method: "POST", cache: "no-store" }
+          );
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(body.error || "Replay Editor 打开失败");
+          if (popup) popup.location.href = body.url;
+          else window.open(body.url, "_blank");
+          setStatus((body.reused ? "已复用" : "已启动") + " Replay Editor · " + body.url, "");
+        } catch (error) {
+          if (popup) popup.close();
+          setStatus(error && error.message ? error.message : String(error), "error");
+        } finally {
+          state.openingReplayEditorKey = "";
+          render();
+        }
+      }
+
+      function openOutline() {
+        els.outlineBackdrop.classList.add("open");
+        els.outlineBackdrop.setAttribute("aria-hidden", "false");
+        window.setTimeout(() => {
+          els.outlineSearchInput.focus();
+          els.outlineSearchInput.select();
+        }, 0);
+      }
+
+      function closeOutline() {
+        els.outlineBackdrop.classList.remove("open");
+        els.outlineBackdrop.setAttribute("aria-hidden", "true");
+      }
+
+      function openMemory() {
+        const filtered = getFilteredSessions();
+        const selected = getSelectedSummary(filtered);
+        renderMemoryPanel(selected, selected ? state.detailCache.get(sessionKey(selected)) : null);
+        els.memoryBackdrop.classList.add("open");
+        els.memoryBackdrop.setAttribute("aria-hidden", "false");
+      }
+
+      function closeMemory() {
+        els.memoryBackdrop.classList.remove("open");
+        els.memoryBackdrop.setAttribute("aria-hidden", "true");
+      }
+
+      els.searchInput.addEventListener("input", (event) => {
+        state.query = event.target.value || "";
+        state.visibleLimit = 100;
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(render, 150);
+      });
+      els.summaryFilter.addEventListener("change", (event) => { state.summaryStatus = event.target.value; state.visibleLimit = 100; render(); });
+      els.scopeFilter.addEventListener("change", (event) => { state.sessionScope = event.target.value; state.visibleLimit = 100; render(); });
+      els.projectFilter.addEventListener("change", (event) => { state.project = event.target.value; state.visibleLimit = 100; render(); });
+      els.sourceFilter.addEventListener("change", (event) => { state.source = event.target.value; state.visibleLimit = 100; render(); });
+      els.typeFilter.addEventListener("change", (event) => { state.sessionType = event.target.value; state.visibleLimit = 100; render(); });
+      els.refreshButton.addEventListener("click", refreshLatest);
+      function handleSummaryAction(event) {
+        const actionButton = event.target.closest("[data-action]");
+        if (!actionButton) return;
+        const action = actionButton.getAttribute("data-action");
+        if (action === "summary-generate") generateSummary();
+        if (action === "summary-copy") {
+          const detail = currentSelectedDetail();
+          const memory = detail ? state.summaryCache.get(sessionKey(detail)) : null;
+          if (memory && memory.summary) copyText(memory.summary, actionButton);
+        }
+        if (action === "summary-copy-context") {
+          const detail = currentSelectedDetail();
+          const memory = detail ? state.summaryCache.get(sessionKey(detail)) : null;
+          const contextCard = buildContextEngineeringText(detail, memory);
+          if (contextCard) copyText(contextCard, actionButton);
+        }
+        if (action === "copy-cwd") {
+          const detail = currentSelectedDetail();
+          if (detail && detail.cwd) copyText(detail.cwd, actionButton);
+        }
+        if (action === "summary-toggle") toggleMemoryCard();
+        if (action === "transcript-toggle") {
+          const card = actionButton.closest(".transcript-card");
+          const textBlock = card ? card.querySelector(".transcript-text[data-expandable='true']") : null;
+          if (!textBlock) return;
+          const collapsed = textBlock.classList.toggle("collapsed");
+          actionButton.textContent = collapsed ? "展开" : "收起";
+        }
+      }
+
+      els.detailRoot.addEventListener("click", handleSummaryAction);
+      els.memoryRoot.addEventListener("click", handleSummaryAction);
+      els.clearButton.addEventListener("click", () => {
+        state.query = "";
+        state.summaryStatus = "all";
+        state.sessionScope = "current";
+        state.project = "all";
+        state.source = "codex";
+        state.sessionType = "all";
+        state.visibleLimit = 100;
+        els.searchInput.value = "";
+        els.summaryFilter.value = "all";
+        els.scopeFilter.value = "current";
+        els.projectFilter.value = "all";
+        els.sourceFilter.value = "codex";
+        els.typeFilter.value = "all";
+        render();
+      });
+      els.outlineSearchInput.addEventListener("input", (event) => {
+        state.outlineQuery = event.target.value || "";
+        const filtered = getFilteredSessions();
+        const selected = getSelectedSummary(filtered);
+        renderOutline(selected, selected ? state.detailCache.get(sessionKey(selected)) : null);
+      });
+      els.outlineList.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-outline-turn]");
+        if (!button) return;
+        jumpToUserTurn(button.getAttribute("data-outline-turn"));
+      });
+      els.copyResumeButton.addEventListener("click", () => {
+        const filtered = getFilteredSessions();
+        const selected = getSelectedSummary(filtered);
+        const detail = selected ? state.detailCache.get(sessionKey(selected)) : null;
+        copyText((detail || selected || {}).resume_command || "");
+      });
+      els.replayEditorButton.addEventListener("click", openReplayEditor);
+      els.prevMatchButton.addEventListener("click", () => focusMatch(activeMatchIndex - 1));
+      els.nextMatchButton.addEventListener("click", () => focusMatch(activeMatchIndex + 1));
+      els.memoryButton.addEventListener("click", openMemory);
+      els.outlineButton.addEventListener("click", openOutline);
+      els.closeMemoryButton.addEventListener("click", closeMemory);
+      els.closeOutlineButton.addEventListener("click", closeOutline);
+      els.outlineBackdrop.addEventListener("click", (event) => { if (event.target === els.outlineBackdrop) closeOutline(); });
+      els.memoryBackdrop.addEventListener("click", (event) => { if (event.target === els.memoryBackdrop) closeMemory(); });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        closeOutline();
+        closeMemory();
+      });
+      document.addEventListener("visibilitychange", () => {
+        scheduleNextAutoRefresh(Date.now());
+        pollStatus();
+      });
+
+      loadIndex(false).then(() => {
+        pollStatus();
+        window.setInterval(() => {
+          pollStatus();
+          maybeAutoRefresh();
+        }, 15000);
+      });
+    })();
+  </script>
+</body>
+</html>

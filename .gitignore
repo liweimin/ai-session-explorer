@@ -1,0 +1,7 @@
+_backups/
+.cache/
+.env.local
+*.log
+.git_ssh/
+.venv/
+output/
