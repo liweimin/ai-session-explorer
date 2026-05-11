@@ -51,15 +51,24 @@ function readConfigValue(key, fallback = "") {
   return localEnv[key] || process.env[key] || fallback;
 }
 
-function resolveConfiguredPath(value, fallbackPath) {
+function resolveConfiguredPath(value) {
   const raw = String(value || "").trim();
-  if (!raw) return fallbackPath;
+  if (!raw) {
+    throw new Error("Missing SESSION_DATA_ROOT. This repository uses split mode only. Set SESSION_DATA_ROOT in .env.local to your private data repository data directory.");
+  }
   return path.resolve(path.isAbsolute(raw) ? raw : path.join(repoRoot, raw));
 }
 
-const dataRoot = resolveConfiguredPath(readConfigValue("SESSION_DATA_ROOT"), path.join(repoRoot, "data"));
+const dataRoot = resolveConfiguredPath(readConfigValue("SESSION_DATA_ROOT"));
+const repoDataRoot = path.resolve(repoRoot, "data");
+const dataRootLower = dataRoot.toLowerCase();
+const repoRootLower = repoRoot.toLowerCase();
+const repoDataRootLower = repoDataRoot.toLowerCase();
+if (dataRootLower === repoDataRootLower || dataRootLower.startsWith(`${repoRootLower}${path.sep}`)) {
+  throw new Error("SESSION_DATA_ROOT must be outside the public tool repository. Point it to the data directory inside your private data repository.");
+}
 const summariesRoot = path.join(dataRoot, "session_summaries");
-const port = Number(readConfigValue("SESSION_EXPLORER_PORT", "8787"));
+const port = Number(readConfigValue("SESSION_EXPLORER_PORT", "8788"));
 
 let refreshState = {
   running: false,

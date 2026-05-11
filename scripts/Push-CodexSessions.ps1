@@ -10,13 +10,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "SessionDataConfig.ps1")
 $dataRoot = Get-SessionDataRoot -RepoRoot $repoRoot
 $dataRepoRoot = Get-SessionDataRepoRoot -DataRoot $dataRoot
-if ([string]::IsNullOrWhiteSpace($dataRepoRoot)) {
-    $dataRepoRoot = $repoRoot
+if ([string]::IsNullOrWhiteSpace($dataRepoRoot) -or $dataRepoRoot -eq $repoRoot) {
+    throw "SESSION_DATA_ROOT must be inside a separate private Git data repository. Current value: $dataRoot"
 }
-$usesExternalDataRepo = $dataRepoRoot -ne $repoRoot
 $cacheRoot = Join-Path $repoRoot ".cache"
 $stageRoot = Join-Path $cacheRoot ("push-stage-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
-$usageGuideName = -join @([char]0x4F7F, [char]0x7528, [char]0x8BF4, [char]0x660E, ".", "m", "d")
 
 $psExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
 
@@ -30,6 +28,14 @@ function Invoke-Git {
     if ($LASTEXITCODE -ne 0) {
         throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
     }
+}
+
+function Get-CurrentGitBranch {
+    $branch = git branch --show-current
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
+        throw "git branch --show-current failed or returned an empty branch"
+    }
+    return $branch.Trim()
 }
 
 function Get-DirtyRepoPaths {
@@ -66,16 +72,7 @@ function Test-IsManagedGeneratedPath {
     )
 
     $normalized = $Path -replace "\\", "/"
-    if ($usesExternalDataRepo) {
-        return $false
-    }
-    return (
-        $normalized -eq "data/session_index.jsonl" -or
-        $normalized.StartsWith("data/sessions/") -or
-        $normalized.StartsWith("data/archived_sessions/") -or
-        $normalized.StartsWith("data/claude/") -or
-        $normalized.StartsWith("data/session_summaries/")
-    )
+    return $false
 }
 
 function Test-IsIgnoredLocalPath {
@@ -107,44 +104,13 @@ function Protect-RepoBeforePull {
         throw "Finish detected unstaged changes outside sync-managed data: $joined. Please commit, stash, or revert them first."
     }
 
-    $stashMessage = "auto-stash generated sync data before finish $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-    $stashPaths = @(
-        "data/session_index.jsonl",
-        "data/sessions",
-        "data/archived_sessions",
-        "data/claude",
-        "data/session_summaries"
-    ) | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) }
-
-    $stashArgs = @("stash", "push", "--include-untracked", "-m", $stashMessage)
-    if ($stashPaths.Count -gt 0) {
-        $stashArgs += @("--")
-        $stashArgs += $stashPaths
-    }
-
-    Invoke-Git -Arguments $stashArgs | Out-Null
-    Write-Host "Temporarily stashed generated sync data so pull --rebase can proceed."
-
-    $stashLines = @(git stash list --format="%gd %gs" --max-count=1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "git stash list failed with exit code $LASTEXITCODE"
-    }
-
-    if ($stashLines.Count -gt 0 -and $stashLines[0] -match "^(stash@\{\d+\}) ") {
-        return $Matches[1]
-    }
-
-    return $null
+    return
 }
 
 function Invoke-DataRepoPull {
-    if (-not $usesExternalDataRepo) {
-        return
-    }
-
     Push-Location $dataRepoRoot
     try {
-        Invoke-Git -Arguments @("pull", "--rebase", "origin", "main")
+        Invoke-Git -Arguments @("pull", "--rebase", "origin", (Get-CurrentGitBranch))
     }
     finally {
         Pop-Location
@@ -156,10 +122,6 @@ function Invoke-DataRepoCommitAndPush {
         [string]$CommitMessage
     )
 
-    if (-not $usesExternalDataRepo) {
-        return $false
-    }
-
     Push-Location $dataRepoRoot
     try {
         Invoke-Git -Arguments @("add", "-A")
@@ -170,7 +132,7 @@ function Invoke-DataRepoCommitAndPush {
         }
 
         Invoke-Git -Arguments @("commit", "-m", $CommitMessage)
-        Invoke-Git -Arguments @("push", "origin", "main")
+        Invoke-Git -Arguments @("push", "origin", (Get-CurrentGitBranch))
         return $true
     }
     finally {
@@ -240,7 +202,7 @@ Push-Location $repoRoot
 $autoStashRef = $null
 try {
     $autoStashRef = Protect-RepoBeforePull
-    Invoke-Git -Arguments @("pull", "--rebase", "origin", "main")
+    Invoke-Git -Arguments @("pull", "--rebase", "origin", (Get-CurrentGitBranch))
     Invoke-DataRepoPull
 
     Sync-Directory -Source (Join-Path $stageRoot "sessions") -Target (Join-Path $dataRoot "sessions")
@@ -250,46 +212,9 @@ try {
     Merge-LineFile -Source (Join-Path $stageRoot "session_index.jsonl") -Target (Join-Path $dataRoot "session_index.jsonl")
     Merge-LineFile -Source (Join-Path $stageRoot "claude\history.jsonl") -Target (Join-Path $dataRoot "claude\history.jsonl")
 
-    if ($usesExternalDataRepo) {
-        [void](Invoke-DataRepoCommitAndPush -CommitMessage $Message)
-        Write-Host "External data repository synced at $dataRepoRoot"
-        exit 0
-    }
-
-    $addPaths = @(
-        "data/session_index.jsonl",
-        "data/sessions",
-        "data/archived_sessions",
-        "data/claude",
-        "data/session_summaries",
-        "Session-Explorer.html",
-        "Open-SessionExplorer.bat",
-        "Start-CodexWork.bat",
-        "Finish-CodexWork.bat",
-        "scripts/Export-CodexSessions.ps1",
-        "scripts/Import-CodexSessions.ps1",
-        "scripts/session-explorer-server.mjs",
-        "scripts/Cleanup-LocalBloat.ps1",
-        "scripts/Push-CodexSessions.ps1",
-        "scripts/Pull-CodexSessions.ps1",
-        "scripts/SessionDataConfig.ps1",
-        "README.md",
-        $usageGuideName,
-        ".gitignore"
-    ) | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) }
-
-    $addArgs = @("add", "-A")
-    $addArgs += $addPaths
-    Invoke-Git -Arguments $addArgs
-
-    $status = git status --porcelain
-    if (-not $status) {
-        Write-Host "No session changes to commit."
-        exit 0
-    }
-
-    Invoke-Git -Arguments @("commit", "-m", $Message)
-    Invoke-Git -Arguments @("push", "origin", "main")
+    [void](Invoke-DataRepoCommitAndPush -CommitMessage $Message)
+    Write-Host "External data repository synced at $dataRepoRoot"
+    exit 0
 }
 finally {
     if ($autoStashRef) {

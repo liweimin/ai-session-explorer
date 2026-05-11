@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-set "PORT=8787"
+set "PORT=8788"
 set "URL=http://127.0.0.1:%PORT%/"
 set "SERVER_SCRIPT=%~dp0scripts\session-explorer-server.mjs"
 set "NODE_EXE="

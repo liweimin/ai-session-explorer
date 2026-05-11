@@ -1,175 +1,226 @@
-# AI Coding Sessions 同步与检索说明
+# AI Session Explorer
 
-这个项目现在不只面向 Codex，也支持 Claude Code。更准确的定位是：
+AI Session Explorer 是一个本地优先的 AI coding 会话同步、检索、总结和回放工具。
 
-> 本地优先的 AI coding 会话同步、检索、总结和回放工具。
+它支持：
 
-日常使用只记住三个入口：
+- Codex 会话
+- Claude Code 会话
+- 跨电脑同步历史会话
+- 本地 Web 检索台
+- Kimi / OpenAI-compatible 会话总结
+- claude-replay editor 跳转
 
-- 开始工作：`Start-AISessionWork.bat`
-- 结束工作：`Finish-AISessionWork.bat`
-- 回看历史：`Open-SessionExplorer.bat`
+## 先理解一个关键点
 
-旧入口 `Start-CodexWork.bat` / `Finish-CodexWork.bat` 仍然保留，会自动转到新的 AI Sessions 入口，避免你原来的点击习惯失效。
+这个项目采用双仓库模式：
 
-## 一、当前支持两种数据模式
+| 仓库 | 可见性 | 放什么 |
+| --- | --- | --- |
+| `ai-session-explorer` | 公开 | 工具代码、页面、脚本、说明文档 |
+| `ai-session-data` | 私有 | 你的真实聊天记录、归档记录、Claude Code 记录、Kimi 总结 |
 
-### 1. 默认单仓库模式
+这样以后可以开源工具，但不会把个人聊天记录放到公开仓库。
 
-如果 `.env.local` 没有配置 `SESSION_DATA_ROOT`，项目继续使用当前仓库里的：
+本仓库不支持旧的单仓库 `data/` 模式。必须配置 `SESSION_DATA_ROOT` 指向私有数据仓库里的 `data` 目录。
 
-```text
-data/
-```
+## 第一次使用
 
-这是兼容模式，和之前用法一致。
-
-### 2. 工具仓库 + 私有数据仓库模式
-
-如果你想为后续开源做准备，推荐把真实会话数据放到另一个私有仓库，例如：
-
-```text
-C:\Users\你的用户名\ai-session-data\data
-```
-
-然后在本项目 `.env.local` 里配置：
-
-```env
-SESSION_DATA_ROOT=C:\Users\你的用户名\ai-session-data\data
-```
-
-这样职责会变成：
-
-- 本项目：保存工具代码、页面、脚本、说明文档
-- 私有数据仓库：保存真实 Codex / Claude Code 会话、Kimi 总结、同步数据
-
-这就是后续开源最关键的拆分：**开源工具，不开源你的数据**。
-
-## 二、三个入口分别做什么
-
-- `Start-AISessionWork.bat`
-  - 更新工具仓库
-  - 如果 `SESSION_DATA_ROOT` 所在目录属于另一个 Git 仓库，也会更新那个私有数据仓库
-  - 再把数据导入本机 `~/.codex` 和 `~/.claude`
-
-- `Finish-AISessionWork.bat`
-  - 从本机导出最新 Codex / Claude Code 会话
-  - 写入 `SESSION_DATA_ROOT`
-  - 如果使用外部私有数据仓库，会在数据仓库里 commit + push
-  - 如果仍使用默认 `data/`，会按旧逻辑在当前仓库提交数据
-
-- `Open-SessionExplorer.bat`
-  - 启动或复用本地 `http://127.0.0.1:8787/` 服务
-  - 检索台读取 `SESSION_DATA_ROOT` 指向的数据
-  - 页面里“刷新最新记录”会从本机导出最新会话到 `SESSION_DATA_ROOT`，然后重建索引
-
-## 三、推荐的长期目录结构
+### 1. 准备两个仓库
 
 工具仓库：
 
-```text
-C:\Users\你的用户名\codex-sessions-sync
+```powershell
+git clone https://github.com/liweimin/ai-session-explorer.git
 ```
 
 私有数据仓库：
 
-```text
-C:\Users\你的用户名\ai-session-data
-  data/
-    sessions/
-    archived_sessions/
-    claude/
-    session_summaries/
-    session_index.jsonl
+```powershell
+git clone https://github.com/<your-account>/ai-session-data.git
 ```
 
-工具仓库的 `.env.local`：
+如果你是新用户，可以在 GitHub 新建一个 private repository，例如 `ai-session-data`，然后 clone 到本机。
+
+推荐目录结构：
+
+```text
+D:\00容器\ai_sys\
+  ai-session-explorer\
+  ai-session-data\
+    data\
+```
+
+### 2. 配置工具仓库
+
+在 `ai-session-explorer` 目录复制一份配置：
+
+```powershell
+copy .env.local.example .env.local
+```
+
+编辑 `.env.local`，至少填这一项：
 
 ```env
-SESSION_DATA_ROOT=C:\Users\你的用户名\ai-session-data\data
+SESSION_DATA_ROOT=D:\00容器\ai_sys\ai-session-data\data
 ```
 
-## 四、常用流程
-
-到另一台电脑开始工作：
-
-```text
-Start-AISessionWork.bat
-```
-
-不确定该恢复哪条会话：
-
-```text
-Open-SessionExplorer.bat
-```
-
-结束工作并同步：
-
-```text
-Finish-AISessionWork.bat
-```
-
-## 五、可选能力
-
-### Kimi / OpenAI-compatible 总结
-
-在 `.env.local` 配置：
+如果要使用 Kimi 总结，再填：
 
 ```env
-SUMMARY_BASE_URL=https://api.example.com
-SUMMARY_API_KEY=replace-with-your-key
+SUMMARY_BASE_URL=https://你的-kimi-compatible-api
+SUMMARY_API_KEY=你的-key
 SUMMARY_MODEL=kimi-for-coding
 SUMMARY_API_FORMAT=openai
 SUMMARY_INPUT_MAX_CHARS=120000
 ```
 
-总结结果会保存到：
+`.env.local` 只保存在本机，不会提交到 Git。
+
+### 3. 开始工作前点击 Start
+
+双击：
 
 ```text
-SESSION_DATA_ROOT\session_summaries
+Start-AISessionWork.bat
 ```
 
-如果你使用私有数据仓库，这些总结也会跟随私有数据仓库同步。
+它会做三件事：
 
-### claude-replay
+- 更新工具仓库
+- 更新私有数据仓库
+- 把私有数据仓库里的会话导入到本机 Codex / Claude Code
 
-`claude-replay` 不是必需依赖。只有点击“打开 Replay Editor”时才需要：
+换电脑工作时，先点这个。
+
+### 4. 查看和搜索历史
+
+双击：
+
+```text
+Open-SessionExplorer.bat
+```
+
+它会打开：
+
+```text
+http://127.0.0.1:8788/
+```
+
+新仓库默认使用 `8788`，旧项目可以继续使用 `8787`，方便你同时打开做对比测试。
+
+页面里点击“刷新最新记录”时，会把本机最新 Codex / Claude Code 会话导出到私有数据仓库的 `data` 目录，并重建本地索引。
+
+### 5. 结束工作后点击 Finish
+
+双击：
+
+```text
+Finish-AISessionWork.bat
+```
+
+它会做三件事：
+
+- 从本机 Codex / Claude Code 导出最新会话
+- 写入私有数据仓库
+- commit 并 push 私有数据仓库
+
+这样另一台电脑下次点 Start 就能拿到最新上下文。
+
+## 每天怎么用
+
+开始工作：
+
+```text
+Start-AISessionWork.bat
+```
+
+需要回看历史：
+
+```text
+Open-SessionExplorer.bat
+```
+
+结束工作：
+
+```text
+Finish-AISessionWork.bat
+```
+
+只记这三个入口即可。
+
+## 数据会保存在哪里
+
+私有数据仓库的 `data` 目录会包含：
+
+```text
+data\
+  sessions\              Codex 当前历史
+  archived_sessions\     Codex 归档历史
+  claude\                Claude Code 历史
+  session_summaries\     Kimi 总结缓存
+  session_index.jsonl    Codex 会话索引
+```
+
+工具仓库的 `.cache` 只是本机缓存，可以删除，不需要提交。
+
+## 可选：安装 claude-replay
+
+只有点击“打开 Replay Editor”时才需要安装：
 
 ```powershell
 npm install -g claude-replay
 claude-replay --help
 ```
 
-## 六、GitHub 私有数据仓库
+不安装也不影响搜索、查看详情、Kimi 总结。
 
-如果你要使用“双仓库模式”，需要准备一个私有数据仓库。
+## 常见问题
 
-如果本机已经登录 GitHub CLI，可以创建：
+### 打开时报 Missing SESSION_DATA_ROOT
 
-```powershell
-gh repo create ai-session-data --private
+说明还没有配置 `.env.local`，或者配置没有生效。
+
+检查：
+
+```env
+SESSION_DATA_ROOT=D:\00容器\ai_sys\ai-session-data\data
 ```
 
-当前这台电脑 `gh` 已安装，但还没有登录。需要先执行：
+这个路径必须在私有数据仓库里，不能指向工具仓库自己的 `data` 目录。
+
+### Start / Finish 拉取失败
+
+先确认两个仓库都有 GitHub 权限：
 
 ```powershell
-gh auth login
+git -C D:\00容器\ai_sys\ai-session-explorer pull
+git -C D:\00容器\ai_sys\ai-session-data pull
 ```
 
-如果你不想用 `gh`，也可以手动在 GitHub 新建 private repository，然后 clone 到本机。
+如果使用 GitHub CLI，可以检查：
 
-## 七、同步内容
+```powershell
+gh auth status
+```
 
-Codex：
+### Kimi 总结失败
 
-- `sessions`
-- `archived_sessions`
-- `session_index.jsonl`
-- `session_summaries`
+检查 `.env.local` 里的：
 
-Claude Code：
+```env
+SUMMARY_BASE_URL=
+SUMMARY_API_KEY=
+SUMMARY_MODEL=
+```
 
-- `~/.claude/projects`
-- `~/.claude/history.jsonl`
+总结是手动触发的，不会自动把所有会话发给模型。
 
-注意：同步的不是整台电脑配置，只是 AI coding 会话相关数据。
+## 面向开源的定位
+
+这个项目的价值不是“又一个聊天记录查看器”，而是：
+
+- 把 AI coding 的历史上下文变成可检索、可回放、可总结的个人知识库
+- 支持多台电脑工作时同步 Codex / Claude Code 会话
+- 让工具开源、数据私有，适合个人长期使用
+- 给非技术用户一个可点击的本地工作流，而不是要求手动找 JSONL 文件

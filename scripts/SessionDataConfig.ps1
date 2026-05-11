@@ -39,14 +39,27 @@ function Get-SessionDataRoot {
     $configured = if ($envValues.ContainsKey("SESSION_DATA_ROOT")) { $envValues["SESSION_DATA_ROOT"] } else { $env:SESSION_DATA_ROOT }
 
     if ([string]::IsNullOrWhiteSpace($configured)) {
-        return (Join-Path $RepoRoot "data")
+        throw "Missing SESSION_DATA_ROOT. This repository uses split mode only. Set SESSION_DATA_ROOT in .env.local to your private data repository data directory."
     }
 
-    if ([System.IO.Path]::IsPathRooted($configured)) {
-        return [System.IO.Path]::GetFullPath($configured)
+    $resolved = if ([System.IO.Path]::IsPathRooted($configured)) {
+        [System.IO.Path]::GetFullPath($configured)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $configured))
     }
 
-    return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $configured))
+    $repoDataRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot "data"))
+    if ($resolved.TrimEnd("\", "/") -ieq $repoDataRoot.TrimEnd("\", "/")) {
+        throw "SESSION_DATA_ROOT cannot point to this tool repository's data directory. Use a separate private data repository, for example D:\00容器\ai_sys\ai-session-data\data."
+    }
+
+    $repoRootFull = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd("\", "/")
+    $resolvedFull = $resolved.TrimEnd("\", "/")
+    if ($resolvedFull -ieq $repoRootFull -or $resolvedFull.StartsWith($repoRootFull + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "SESSION_DATA_ROOT must be outside the public tool repository. Point it to the data directory inside your private data repository."
+    }
+
+    return $resolved
 }
 
 function Get-SessionDataRepoRoot {
