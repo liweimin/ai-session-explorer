@@ -19,7 +19,7 @@ const indexPath = path.join(cacheRoot, "index.json");
 const manifestPath = path.join(cacheRoot, "manifest.json");
 const envLocalPath = path.join(repoRoot, ".env.local");
 const htmlPath = path.join(repoRoot, "Session-Explorer.html");
-const cacheVersion = 11;
+const cacheVersion = 12;
 
 function parseEnvText(text) {
   const env = {};
