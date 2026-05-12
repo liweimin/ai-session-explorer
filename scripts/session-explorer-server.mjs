@@ -799,6 +799,8 @@ async function parseCodexSession(file, source, indexMap) {
 }
 
 async function parseClaudeSession(file) {
+  const isSubagent = isClaudeSubagentFile(file);
+  const parentThreadId = isSubagent ? inferClaudeParentThreadId(file) : "";
   let sessionId = "";
   let startedAtMs = 0;
   let updatedAtMs = 0;
@@ -884,10 +886,10 @@ async function parseClaudeSession(file) {
     source: "claude_projects",
     source_kind: "claude_code",
     source_label: "Claude Code",
-    session_type: "main",
-    session_type_label: "普通聊天",
-    is_subagent: false,
-    parent_thread_id: "",
+    session_type: isSubagent ? "subagent" : "main",
+    session_type_label: isSubagent ? "子智能体任务" : "普通聊天",
+    is_subagent: isSubagent,
+    parent_thread_id: parentThreadId,
     agent_nickname: "",
     agent_role: "",
     session_id: sessionId,
@@ -907,6 +909,19 @@ async function parseClaudeSession(file) {
     transcript_items: transcriptItems,
     agent_messages: agentMessages
   });
+}
+
+function isClaudeSubagentFile(file) {
+  const normalized = String(file || "").replace(/\\/g, "/");
+  return /\/subagents\/agent-[^/]+\.jsonl$/i.test(normalized) || /^agent-/i.test(path.basename(normalized));
+}
+
+function inferClaudeParentThreadId(file) {
+  const normalized = String(file || "").replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  const subagentIndex = parts.lastIndexOf("subagents");
+  if (subagentIndex > 0) return parts[subagentIndex - 1] || "";
+  return "";
 }
 
 function makeRecord(record) {
